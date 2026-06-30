@@ -1,0 +1,24 @@
+name: nl-closing
+on:
+  schedule:
+    - cron: "15 */2 * * *"
+  workflow_dispatch:
+concurrency:
+  group: nl-closing
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run closing autofill
+        env:
+          GHL_TOKEN: ${{ secrets.GHL_TOKEN }}
+          GHL_LOCATION_ID: ${{ secrets.GHL_LOCATION_ID }}
+          FATHOM_API_KEY: ${{ secrets.FATHOM_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python3 autofill/nl_closing_run.py
