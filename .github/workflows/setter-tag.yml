@@ -1,0 +1,24 @@
+name: nl-setter-tag
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+concurrency:
+  group: nl-setter-tag
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Tag Sara/Sary
+        env:
+          KOMMO_SUBDOMAIN: ${{ secrets.KOMMO_SUBDOMAIN }}
+          KOMMO_LONG_LIVED_TOKEN: ${{ secrets.KOMMO_LONG_LIVED_TOKEN }}
+          GHL_TOKEN: ${{ secrets.GHL_TOKEN }}
+          GHL_LOCATION_ID: ${{ secrets.GHL_LOCATION_ID }}
+        run: python3 autofill/nl_setter_tag.py
