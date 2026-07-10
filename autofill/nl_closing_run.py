@@ -29,12 +29,12 @@ F_LINK="EZqcLopGWnk2nUfMR5Yz"   # Link Llamada Closing
 DONE_TAG="closing-analizado"
 def cg(u,key=None):
     hdr=["-H",f"X-Api-Key: {key}"] if key else H
-    for _ in range(4):
-        r=subprocess.run(["curl","-s","-m","30",u,*hdr],capture_output=True,text=True).stdout
+    for a in range(6):
+        r=subprocess.run(["curl","-s","-m","40",u,*hdr],capture_output=True,text=True).stdout
         if r:
             try: return json.loads(r)
             except: pass
-        time.sleep(0.5)
+        time.sleep(0.6*(a+1))  # backoff creciente contra throttle de Fathom
     return {}
 def strip(s):
     import html as _h
@@ -61,18 +61,30 @@ for _ in range(24):
     d=cg(u,key=FKEY)
     if "items" not in d:  # pagina fallida (throttle) -> reintentar, no cortar la paginacion en silencio
         _fails+=1
-        if _fails>4: print("AVISO: Fathom fallo repetido, fmap parcial"); break
-        time.sleep(3); continue
+        if _fails>8: print("AVISO: Fathom fallo repetido, fmap parcial"); break
+        time.sleep(4); continue
     for m in d.get("items",[]):
         title=m.get("title") or ""
         if not re.search(r'closing|planificaci|estrateg',title,re.I): continue
-        if re.search(r'triage|triaje',title,re.I): continue
-        lead=re.split(r'\s*-\s*',title)[0]
+        if re.search(r'triage|triaje|introducci|validaci',title,re.I): continue
+        KW=re.compile(r'reuni|planificaci|estrateg|closing|dr\.?|con ',re.I)
+        segs=[s.strip() for s in re.split(r'\s*-\s*',title) if s.strip()]
+        lead=next((s for s in segs if not KW.search(s)),segs[0] if segs else "")
+        if not lead: continue
         tr=m.get("transcript") or []
         txt="\n".join(f"{(t.get('speaker') or {}).get('display_name','?')}: {t.get('text','')}" for t in tr)
-        if txt: fmap[nkey(lead)]={"transcript":txt[:18000],"url":m.get("url")}
+        if txt: fmap[nkey(lead)]={"transcript":txt[:18000],"url":m.get("url"),"toks":set(norm(lead)[:4])}
     cur=d.get("next_cursor")
     if not cur: break
+def match_lead(nombre):
+    # 1) clave exacta de 2 tokens; 2) solape de tokens (>=2) -> robusto a nombre-vs-apellido distinto (ej. "Heber Eloy" vs "Heber Hualpa")
+    fa=fmap.get(nkey(nombre))
+    if fa: return fa
+    nt=set(norm(nombre)[:4]); best=None; bov=1
+    for v in fmap.values():
+        ov=len(nt & v.get("toks",set()))
+        if ov>bov: bov=ov; best=v
+    return best
 cat={f["id"]:f.get("name") for f in cg(f"https://services.leadconnectorhq.com/locations/{LOC}/customFields").get("customFields",[])}
 
 def fetch(cid):
@@ -82,7 +94,7 @@ def fetch(cid):
     if DONE_TAG in tags: return None
     if (cf.get(F_INFO) or "").strip(): return None  # ya tiene resumen de closing
     nombre=c.get("contactName") or ((c.get("firstName") or "")+" "+(c.get("lastName") or "")).strip()
-    fa=fmap.get(nkey(nombre))
+    fa=match_lead(nombre)
     if not fa: return None  # sin transcripcion -> no se puede resumir
     notes=cg(f"https://services.leadconnectorhq.com/contacts/{cid}/notes").get("notes",[])
     filled={cat.get(k,k):v for k,v in cf.items() if v not in (None,"") and not str(k).startswith(("Analisis","Informaci"))}
@@ -99,8 +111,11 @@ SYS=("Eres analista de llamadas de CLOSING (venta) de NatschoLibre (consultoria 
 "medico/ingeniero; closer principal: Natalie). Te paso la transcripcion de una llamada de cierre + datos de la ficha. "
 "Devuelve un analisis para Natalie. REGLAS: no inventes; ASCII sin tildes. "
 "Score 0-100 de calidad/probabilidad. Objeciones: las que aparecieron. Motivo: si NO cerro, el motivo principal "
-"(Dinero / Tiempo / Decisor / No convencido / Idioma-nivel / Otro). info: resumen de 5-8 lineas (perfil, que paso, "
-"resultado, objeciones, y recomendacion/proximo paso).")
+"(Dinero / Tiempo / Decisor / No convencido / Idioma-nivel / Otro). "
+"FORMATO de 'info' (briefing post-closing, secciones con este encabezado exacto): "
+"PERFIL: quien es y su situacion. RESULTADO: vendio / no vendio / seguimiento y por que. "
+"OBJECIONES: las que salieron y como se manejaron. DINERO: capacidad y lo acordado (ticket/cuotas si consta). "
+"PROXIMO PASO: accion concreta para Natalie/seguimiento. Si un dato no consta, escribe 'no consta'.")
 SCHEMA={"type":"object","additionalProperties":False,"properties":{
   "info":{"type":"string"},"score":{"type":"integer"},"objeciones":{"type":"string"},"motivo":{"type":"string"}},
   "required":["info","score","objeciones","motivo"]}
