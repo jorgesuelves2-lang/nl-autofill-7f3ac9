@@ -47,40 +47,53 @@ def norm(s):
     s=re.sub(r'\b(ing|dr|dra|md|mg|med|odont|e-md|arg)\b','',s); return re.sub(r'[^a-z ]','',s).split()
 def nkey(s): return " ".join(norm(s)[:2])
 
-# 1) descubrir leads
-if BACKLOG:
-    import datetime
-    now=int(datetime.datetime.now(datetime.timezone.utc).timestamp()*1000); cut=now-DAYS*86400*1000
-    ev=cg(f"https://services.leadconnectorhq.com/calendars/events?locationId={LOC}&calendarId={TRIAGE_CAL}&startTime={cut}&endTime={now}").get("events",[])
-    cids=[]; seen=set()
-    for e in ev:
-        c=e.get("contactId")
-        if c and c not in seen: seen.add(c); cids.append(c)
-else:
-    page=1; cids=[]
+# 1) descubrir leads: ETIQUETA (rapido) + RED DE SEGURIDAD por calendario (triajes recientes sin analizar,
+# aunque nadie pusiera la etiqueta). --backlog = solo calendario con ventana larga.
+import datetime
+seen=set(); cids=[]
+def add(c):
+    if c and c not in seen: seen.add(c); cids.append(c)
+if not BACKLOG:
+    page=1
     while True:
         d=csearch({"locationId":LOC,"page":page,"pageLimit":100,"filters":[{"field":"tags","operator":"eq","value":READY_TAG}]})
         cs=d.get("contacts",[])
-        cids+=[c["id"] for c in cs if DONE_TAG not in (c.get("tags") or [])]
+        for c in cs: add(c["id"])
         if len(cs)<100: break
         page+=1
+# calendario: SIEMPRE (ventana corta en modo normal, DAYS en backlog) -> nada queda sin analizar
+win=DAYS if BACKLOG else int(os.environ.get("SAFETY_DAYS","10"))
+now=int(datetime.datetime.now(datetime.timezone.utc).timestamp()*1000); cut=now-win*86400*1000
+ev=cg(f"https://services.leadconnectorhq.com/calendars/events?locationId={LOC}&calendarId={TRIAGE_CAL}&startTime={cut}&endTime={now}").get("events",[])
+for e in ev:
+    st=e.get("startTime")
+    if st and str(st)>datetime.datetime.utcnow().isoformat(): continue  # solo citas ya pasadas
+    add(e.get("contactId"))
 
 if not cids:
     json.dump([],open(OUT,"w"))
-    print(f"Modo: {'BACKLOG' if BACKLOG else 'ETIQUETA'} | sin pendientes."); raise SystemExit(0)
+    print(f"Modo: {'BACKLOG' if BACKLOG else 'ETIQUETA+CAL'} | sin pendientes."); raise SystemExit(0)
 
 # 2) Fathom: triajes con transcripcion -> mapa por nombre (solo si hay candidatos)
-fmap={}; cur=None
-for _ in range(16):
+fmap={}; cur=None; _fails=0
+for _ in range(24):
     u='https://api.fathom.ai/external/v1/meetings?include_transcript=true&limit=25'+(f'&cursor={cur}' if cur else '')
     d=cg(u,key=FKEY)
+    if "items" not in d:  # pagina fallida (throttle) -> reintentar, no cortar la paginacion en silencio
+        _fails+=1
+        if _fails>4: print("AVISO: Fathom fallo repetido, fmap parcial"); break
+        time.sleep(3); continue
     for m in d.get("items",[]):
         title=m.get("title") or ""
-        if not re.search(r'triage|triaje',title,re.I): continue
-        lead=re.split(r'\s*-\s*',title)[0]
+        # triajes: "X - Triage" o "Reunion de Introduccion/Validacion - X" (excluir closing/planificacion)
+        if not re.search(r'triage|triaje|introducci|validaci',title,re.I): continue
+        if re.search(r'closing|planificaci|estrateg',title,re.I): continue
+        KW=re.compile(r'reuni|introducci|validaci|triage|triaje|llamada',re.I)
+        segs=[s.strip() for s in re.split(r'\s*-\s*',title) if s.strip()]
+        lead=next((s for s in segs if not KW.search(s)),segs[0] if segs else "")
         tr=m.get("transcript") or []
         txt="\n".join(f"{(t.get('speaker') or {}).get('display_name','?')}: {t.get('text','')}" for t in tr)
-        if txt: fmap[nkey(lead)]={"transcript":txt[:16000]}
+        if txt and lead: fmap[nkey(lead)]={"transcript":txt[:16000]}
     cur=d.get("next_cursor")
     if not cur: break
 cat={f["id"]:f.get("name") for f in cg(f"https://services.leadconnectorhq.com/locations/{LOC}/customFields").get("customFields",[])}
@@ -90,7 +103,8 @@ def fetch(cid):
     notes=cg(f"https://services.leadconnectorhq.com/contacts/{cid}/notes").get("notes",[])
     cf={x.get("id"):x.get("value") for x in c.get("customFields",[])}
     tags=c.get("tags",[]) or []
-    if DONE_TAG in tags: return None
+    # OJO: NO excluir por DONE_TAG — un lead analizado pronto (solo setting) debe re-entrar cuando
+    # llegue la transcripcion del triaje. La idempotencia la dan los campos vacios (needs_*).
     notes_txt=[strip(n.get("body")) for n in notes]
     nombre=c.get("contactName") or ((c.get("firstName") or "")+" "+(c.get("lastName") or "")).strip()
     fa=fmap.get(nkey(nombre))
