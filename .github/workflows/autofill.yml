@@ -3,6 +3,8 @@ on:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
+  repository_dispatch:
+    types: [triaje-listo]
 concurrency:
   group: nl-autofill
   cancel-in-progress: false
