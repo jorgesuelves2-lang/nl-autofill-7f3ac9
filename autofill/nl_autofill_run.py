@@ -26,10 +26,19 @@ SYS=("Eres el analista de cualificacion de NatschoLibre (consultoria que ayuda a
 "indica de quien es (ej. 'info de Sary'). (3) Para TRIAJE indica la fuente: 'transcripcion de Fathom' o "
 "'resumen en la ficha'. (4) Evalua cualificacion en 5 ejes: perfil, DINERO (capacidad real), decision "
 "(decisor), plazo/urgencia, compromiso. Senala riesgos y, si el formulario dice 'no cualifica' pero el "
-"triaje lo pasa, mencionalo. (5) Da una recomendacion corta para el closer. (6) info_triaje = resumen "
-"BREVE (4-6 lineas) que alimenta el email al closer. (7) Texto en ASCII simple, sin tildes. "
+"triaje lo pasa, mencionalo. (5) Da una recomendacion corta para el closer. (6) info_triaje = BRIEFING ESTRUCTURADO "
+"para el closer segun el FORMATO de abajo (alimenta el email pre-closing). (7) Texto en ASCII simple, sin tildes. "
 "(8) Scores 0-100 (alto: profesional con dinero, decision clara, urgencia, buen nivel; bajo: sin dinero, "
-"indeciso, nivel muy bajo o estudiante sin titulo).")
+"indeciso, nivel muy bajo o estudiante sin titulo).\n"
+"FORMATO de info_triaje (briefing para el closer, 10-16 lineas, secciones con este encabezado exacto):\n"
+"PERFIL: nombre, edad si consta, pais, profesion/situacion (estudiante/general/especialista) y donde obtuvo el titulo.\n"
+"OBJETIVO: que busca en Alemania y plazo; nivel de aleman y horas/semana si constan.\n"
+"DOLORES: por que se quiere ir (motivacion real).\n"
+"INVERSION: capacidad economica (ahorro/apoyo/plan) tal como conste.\n"
+"RUTA: viabilidad segun titulo (UE vs LATAM) y tiempos realistas.\n"
+"OBJECIONES: dudas o frenos que salieron.\n"
+"RECOMENDACION: 1-2 lineas accionables para el closer + proximo paso.\n"
+"Si un dato no consta, escribe 'no consta' (no inventes).")
 
 SCHEMA={"type":"object","additionalProperties":False,"properties":{
   "score_setting":{"type":"integer"},"analisis_setting":{"type":"string"},
@@ -48,7 +57,7 @@ def claude(lead):
         partes.append("TRANSCRIPCION DEL TRIAJE (Fathom):"); partes.append(lead["transcripcion_triaje"])
     instr=("\nRellena SOLO lo que se necesita (si needs_setting=false deja score_setting=0 y "
            "analisis_setting=''; si needs_triage=false deja score_triage=0, analisis_triaje='' e info_triaje='').")
-    body={"model":MODEL,"max_tokens":1500,
+    body={"model":MODEL,"max_tokens":2200,
           "system":SYS,
           "messages":[{"role":"user","content":"\n".join(partes)+instr}],
           "output_config":{"format":{"type":"json_schema","schema":SCHEMA}}}
