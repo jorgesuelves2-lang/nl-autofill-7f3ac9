@@ -55,10 +55,14 @@ if not cids:
     print("Sin closings recientes."); raise SystemExit(0)
 
 # 2) Fathom: transcripciones de CLOSING -> mapa por nombre
-fmap={}; cur=None
-for _ in range(16):
+fmap={}; cur=None; _fails=0
+for _ in range(24):
     u='https://api.fathom.ai/external/v1/meetings?include_transcript=true&limit=25'+(f'&cursor={cur}' if cur else '')
     d=cg(u,key=FKEY)
+    if "items" not in d:  # pagina fallida (throttle) -> reintentar, no cortar la paginacion en silencio
+        _fails+=1
+        if _fails>4: print("AVISO: Fathom fallo repetido, fmap parcial"); break
+        time.sleep(3); continue
     for m in d.get("items",[]):
         title=m.get("title") or ""
         if not re.search(r'closing|planificaci|estrateg',title,re.I): continue
@@ -115,7 +119,11 @@ def claude(p):
     if not d.get("content"): raise RuntimeError("Claude: "+o[:200])
     return json.loads(next(b["text"] for b in d["content"] if b.get("type")=="text"))
 def put(cid,fields):
-    return subprocess.run(["curl","-s","-X","PUT",f"https://services.leadconnectorhq.com/contacts/{cid}",*HP,"--data",json.dumps({"customFields":fields})],capture_output=True,text=True).stdout
+    r=subprocess.run(["curl","-s","-X","PUT",f"https://services.leadconnectorhq.com/contacts/{cid}",*HP,"--data",json.dumps({"customFields":fields})],capture_output=True,text=True).stdout
+    try: ok=bool(json.loads(r).get("contact"))
+    except: ok=False
+    if not ok: raise RuntimeError("PUT fallo: "+r[:150])
+    return r
 ok=0
 for p in pend:
     try:
