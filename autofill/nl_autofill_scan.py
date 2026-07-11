@@ -65,10 +65,16 @@ if not BACKLOG:
 win=DAYS if BACKLOG else int(os.environ.get("SAFETY_DAYS","10"))
 now=int(datetime.datetime.now(datetime.timezone.utc).timestamp()*1000); cut=now-win*86400*1000
 ev=cg(f"https://services.leadconnectorhq.com/calendars/events?locationId={LOC}&calendarId={TRIAGE_CAL}&startTime={cut}&endTime={now}").get("events",[])
+ev_title={}  # cid -> nombre del titulo del evento (para casar Fathom si el contacto es un duplicado sin nombre)
+_TKW=re.compile(r'reuni|introducci|validaci|triage|triaje|llamada|con natalie|dr\.?',re.I)
 for e in ev:
     st=e.get("startTime")
     if st and str(st)>datetime.datetime.utcnow().isoformat(): continue  # solo citas ya pasadas
-    add(e.get("contactId"))
+    cid=e.get("contactId"); add(cid)
+    if cid:
+        segs=[s.strip() for s in re.split(r'\s*-\s*',e.get("title") or "") if s.strip()]
+        nm=next((s for s in segs if not _TKW.search(s)),"")
+        if nm: ev_title[cid]=nm
 
 if not cids:
     json.dump([],open(OUT,"w"))
@@ -107,7 +113,9 @@ def fetch(cid):
     # llegue la transcripcion del triaje. La idempotencia la dan los campos vacios (needs_*).
     notes_txt=[strip(n.get("body")) for n in notes]
     nombre=c.get("contactName") or ((c.get("firstName") or "")+" "+(c.get("lastName") or "")).strip()
-    fa=fmap.get(nkey(nombre))
+    titulo=ev_title.get(cid,"")
+    if not nombre: nombre=titulo or "(sin nombre)"  # contacto duplicado sin nombre -> usa el del titulo del evento
+    fa=fmap.get(nkey(nombre)) or (fmap.get(nkey(titulo)) if titulo else None)  # respaldo: casar por el titulo del evento
     has_note=any(("contexto del prospecto" in n.lower() or "fathom.video/share" in n.lower()) for n in notes_txt)
     needs_setting=not (cf.get(F_ANALISIS_SETTING) or "").strip()
     needs_triage=(bool(fa) or has_note or any(t.startswith("triage-") for t in tags)) and not (cf.get(F_ANALISIS_TRIAJE) or "").strip()
