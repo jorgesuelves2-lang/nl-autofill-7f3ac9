@@ -45,12 +45,18 @@ def norm(s):
 def nkey(s): return " ".join(norm(s)[:2])
 now=int(datetime.datetime.now(datetime.timezone.utc).timestamp()*1000); cut=now-DAYS*86400*1000
 
-# 1) contactos con cita de CLOSING (pasada)
-cids={}
+# 1) contactos con cita de CLOSING (pasada). Guardamos tambien el NOMBRE del titulo del evento,
+# para casar la transcripcion aunque el contacto de la cita sea un duplicado SIN nombre.
+cids={}; ev_title={}
+_KW=re.compile(r'reuni|planificaci|estrateg|closing|dr\.?|con natalie',re.I)
 for cal in CLOSING_CALS:
     for e in cg(f"https://services.leadconnectorhq.com/calendars/events?locationId={LOC}&calendarId={cal}&startTime={cut}&endTime={now}").get("events",[]):
         c=e.get("contactId")
-        if c: cids[c]=str(e.get("startTime"))[:10]
+        if not c: continue
+        cids[c]=str(e.get("startTime"))[:10]
+        segs=[s.strip() for s in re.split(r'\s*-\s*',e.get("title") or "") if s.strip()]
+        nm=next((s for s in segs if not _KW.search(s)),"")
+        if nm: ev_title[c]=nm
 if not cids:
     print("Sin closings recientes."); raise SystemExit(0)
 
@@ -94,8 +100,9 @@ def fetch(cid):
     if DONE_TAG in tags: return None
     if (cf.get(F_INFO) or "").strip(): return None  # ya tiene resumen de closing
     nombre=c.get("contactName") or ((c.get("firstName") or "")+" "+(c.get("lastName") or "")).strip()
-    fa=match_lead(nombre)
+    fa=match_lead(nombre) or match_lead(ev_title.get(cid,""))  # respaldo: nombre del titulo del evento (contactos duplicados sin nombre)
     if not fa: return None  # sin transcripcion -> no se puede resumir
+    if not nombre: nombre=ev_title.get(cid,"(sin nombre)")
     notes=cg(f"https://services.leadconnectorhq.com/contacts/{cid}/notes").get("notes",[])
     filled={cat.get(k,k):v for k,v in cf.items() if v not in (None,"") and not str(k).startswith(("Analisis","Informaci"))}
     return {"contact_id":cid,"nombre":nombre,"campos":filled,"notas":[strip(n.get("body")) for n in notes],
