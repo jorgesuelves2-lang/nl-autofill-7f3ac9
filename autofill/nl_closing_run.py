@@ -79,7 +79,7 @@ for _ in range(24):
         if not lead: continue
         tr=m.get("transcript") or []
         txt="\n".join(f"{(t.get('speaker') or {}).get('display_name','?')}: {t.get('text','')}" for t in tr)
-        if txt: fmap[nkey(lead)]={"transcript":txt[:18000],"url":m.get("url"),"toks":set(norm(lead)[:4])}
+        if txt: fmap[nkey(lead)]={"transcript":txt[:18000],"url":m.get("share_url") or m.get("url"),"toks":set(norm(lead)[:4])}
     cur=d.get("next_cursor")
     if not cur: break
 def match_lead(nombre):
