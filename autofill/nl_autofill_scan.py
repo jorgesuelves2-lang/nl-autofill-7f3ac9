@@ -99,7 +99,7 @@ for _ in range(24):
         lead=next((s for s in segs if not KW.search(s)),segs[0] if segs else "")
         tr=m.get("transcript") or []
         txt="\n".join(f"{(t.get('speaker') or {}).get('display_name','?')}: {t.get('text','')}" for t in tr)
-        if txt and lead: fmap[nkey(lead)]={"transcript":txt[:16000]}
+        if txt and lead: fmap[nkey(lead)]={"transcript":txt[:16000],"url":m.get("share_url") or m.get("url")}
     cur=d.get("next_cursor")
     if not cur: break
 cat={f["id"]:f.get("name") for f in cg(f"https://services.leadconnectorhq.com/locations/{LOC}/customFields").get("customFields",[])}
@@ -124,7 +124,8 @@ def fetch(cid):
     return {"contact_id":cid,"nombre":nombre,"tags":tags,
             "needs_setting":needs_setting,"needs_triage":needs_triage,
             "campos_formulario":filled,"notas":notes_txt,
-            "transcripcion_triaje": fa["transcript"] if fa else None}
+            "transcripcion_triaje": fa["transcript"] if fa else None,
+            "link_triaje": (fa.get("url") if fa else None)}
 out=[]
 with ThreadPoolExecutor(max_workers=8) as ex:
     for r in ex.map(fetch,cids):
