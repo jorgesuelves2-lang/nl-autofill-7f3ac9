@@ -81,6 +81,7 @@ for lead in pend:
         if lead["needs_setting"]: r["score_setting"]=a["score_setting"]; r["analisis_setting"]=a["analisis_setting"]
         if lead["needs_triage"]:
             r["score_triage"]=a["score_triage"]; r["analisis_triaje"]=a["analisis_triaje"]; r["info_triaje"]=a["info_triaje"]
+            if lead.get("link_triaje"): r["link_triaje"]=lead["link_triaje"]
         results.append(r); print("  OK",lead["nombre"])
     except Exception as e:
         print("  FALLO",lead["nombre"],"->",str(e)[:120])
