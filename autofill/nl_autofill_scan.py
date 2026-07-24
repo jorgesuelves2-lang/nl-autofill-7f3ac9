@@ -17,6 +17,21 @@ def env(k, f="ghl.env"):
         if m: return m.group(1).strip()
     raise SystemExit(f"falta secreto {k}")
 T=env("GHL_TOKEN"); LOC=env("GHL_LOCATION_ID"); FKEY=env("FATHOM_API_KEY","fathom.env")
+def fkeys():
+    # Todas las cuentas de Fathom a leer: FATHOM_API_KEY, FATHOM_API_KEY_2, _CHRISTIAN... (env de CI + fichero local)
+    ks=[]
+    for k,v in os.environ.items():
+        if k.startswith("FATHOM_API_KEY") and (v or "").strip(): ks.append(v.strip())
+    p=os.path.expanduser("~/.natscholibre_secrets/fathom.env")
+    if os.path.exists(p):
+        for line in open(p):
+            m=re.match(r'(FATHOM_API_KEY[A-Za-z0-9_]*)\s*=\s*(\S.*)',line.strip())
+            if m: ks.append(m.group(2).strip())
+    seen=set(); out=[]
+    for k in ks:
+        if k and k not in seen: seen.add(k); out.append(k)
+    return out or [FKEY]
+FKEYS=fkeys()
 H=["-H",f"Authorization: Bearer {T}","-H","Version: 2021-07-28","-H","Accept: application/json"]
 HP=H+["-H","Content-Type: application/json"]
 TRIAGE_CAL="2EY5mRYqpaAx4qfnsWJM"; DAYS=30
@@ -83,27 +98,29 @@ if not cids:
 # 2) Fathom: triajes con transcripcion -> mapa por nombre (solo si hay candidatos)
 # created_after limita a la ventana de trabajo -> pocas paginas -> sin throttle (fix 24-jul: emails al closer vacios)
 _ca=(datetime.datetime.utcnow()-datetime.timedelta(days=win+3)).strftime('%Y-%m-%dT%H:%M:%SZ')
-fmap={}; cur=None; _fails=0
-for _ in range(24):
-    u=f'https://api.fathom.ai/external/v1/meetings?include_transcript=true&limit=25&created_after={_ca}'+(f'&cursor={cur}' if cur else '')
-    d=cg(u,key=FKEY)
-    if "items" not in d:  # pagina fallida (throttle) -> reintentar, no cortar la paginacion en silencio
-        _fails+=1
-        if _fails>4: print("AVISO: Fathom fallo repetido, fmap parcial"); break
-        time.sleep(3); continue
-    for m in d.get("items",[]):
-        title=m.get("title") or ""
-        # triajes: "X - Triage" o "Reunion de Introduccion/Validacion - X" (excluir closing/planificacion)
-        if not re.search(r'triage|triaje|introducci|validaci',title,re.I): continue
-        if re.search(r'closing|planificaci|estrateg',title,re.I): continue
-        KW=re.compile(r'reuni|introducci|validaci|triage|triaje|llamada',re.I)
-        segs=[s.strip() for s in re.split(r'\s*-\s*',title) if s.strip()]
-        lead=next((s for s in segs if not KW.search(s)),segs[0] if segs else "")
-        tr=m.get("transcript") or []
-        txt="\n".join(f"{(t.get('speaker') or {}).get('display_name','?')}: {t.get('text','')}" for t in tr)
-        if txt and lead: fmap[nkey(lead)]={"transcript":txt[:16000],"url":m.get("share_url") or m.get("url")}
-    cur=d.get("next_cursor")
-    if not cur: break
+fmap={}
+for _FK in FKEYS:  # recorre cada cuenta de Fathom (David/Natalie + Christian...) y junta los triajes
+    cur=None; _fails=0
+    for _ in range(24):
+        u=f'https://api.fathom.ai/external/v1/meetings?include_transcript=true&limit=25&created_after={_ca}'+(f'&cursor={cur}' if cur else '')
+        d=cg(u,key=_FK)
+        if "items" not in d:  # pagina fallida (throttle) -> reintentar, no cortar la paginacion en silencio
+            _fails+=1
+            if _fails>4: print("AVISO: Fathom fallo repetido, fmap parcial"); break
+            time.sleep(3); continue
+        for m in d.get("items",[]):
+            title=m.get("title") or ""
+            # triajes: "X - Triage" o "Reunion de Introduccion/Validacion - X" (excluir closing/planificacion)
+            if not re.search(r'triage|triaje|introducci|validaci',title,re.I): continue
+            if re.search(r'closing|planificaci|estrateg',title,re.I): continue
+            KW=re.compile(r'reuni|introducci|validaci|triage|triaje|llamada',re.I)
+            segs=[s.strip() for s in re.split(r'\s*-\s*',title) if s.strip()]
+            lead=next((s for s in segs if not KW.search(s)),segs[0] if segs else "")
+            tr=m.get("transcript") or []
+            txt="\n".join(f"{(t.get('speaker') or {}).get('display_name','?')}: {t.get('text','')}" for t in tr)
+            if txt and lead: fmap[nkey(lead)]={"transcript":txt[:16000],"url":m.get("share_url") or m.get("url")}
+        cur=d.get("next_cursor")
+        if not cur: break
 cat={f["id"]:f.get("name") for f in cg(f"https://services.leadconnectorhq.com/locations/{LOC}/customFields").get("customFields",[])}
 
 def fetch(cid):
