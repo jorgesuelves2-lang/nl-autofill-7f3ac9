@@ -81,9 +81,11 @@ if not cids:
     print(f"Modo: {'BACKLOG' if BACKLOG else 'ETIQUETA+CAL'} | sin pendientes."); raise SystemExit(0)
 
 # 2) Fathom: triajes con transcripcion -> mapa por nombre (solo si hay candidatos)
+# created_after limita a la ventana de trabajo -> pocas paginas -> sin throttle (fix 24-jul: emails al closer vacios)
+_ca=(datetime.datetime.utcnow()-datetime.timedelta(days=win+3)).strftime('%Y-%m-%dT%H:%M:%SZ')
 fmap={}; cur=None; _fails=0
 for _ in range(24):
-    u='https://api.fathom.ai/external/v1/meetings?include_transcript=true&limit=25'+(f'&cursor={cur}' if cur else '')
+    u=f'https://api.fathom.ai/external/v1/meetings?include_transcript=true&limit=25&created_after={_ca}'+(f'&cursor={cur}' if cur else '')
     d=cg(u,key=FKEY)
     if "items" not in d:  # pagina fallida (throttle) -> reintentar, no cortar la paginacion en silencio
         _fails+=1
