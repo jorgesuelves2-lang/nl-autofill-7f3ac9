@@ -61,9 +61,11 @@ if not cids:
     print("Sin closings recientes."); raise SystemExit(0)
 
 # 2) Fathom: transcripciones de CLOSING -> mapa por nombre
+# created_after limita a la ventana DAYS -> pocas paginas -> sin throttle
+_ca=(datetime.datetime.utcnow()-datetime.timedelta(days=DAYS+3)).strftime('%Y-%m-%dT%H:%M:%SZ')
 fmap={}; cur=None; _fails=0
 for _ in range(24):
-    u='https://api.fathom.ai/external/v1/meetings?include_transcript=true&limit=25'+(f'&cursor={cur}' if cur else '')
+    u=f'https://api.fathom.ai/external/v1/meetings?include_transcript=true&limit=25&created_after={_ca}'+(f'&cursor={cur}' if cur else '')
     d=cg(u,key=FKEY)
     if "items" not in d:  # pagina fallida (throttle) -> reintentar, no cortar la paginacion en silencio
         _fails+=1
