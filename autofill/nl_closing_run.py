@@ -15,6 +15,21 @@ def env(k,f="ghl.env"):
     if v: return v
     b=open(os.path.expanduser(f"~/.natscholibre_secrets/{f}")).read(); return re.search(rf'{k}=(.+)',b).group(1).strip()
 T=env("GHL_TOKEN"); LOC=env("GHL_LOCATION_ID"); FKEY=env("FATHOM_API_KEY","fathom.env"); AKEY=env("ANTHROPIC_API_KEY","anthropic.env")
+def fkeys():
+    # Todas las cuentas de Fathom a leer: FATHOM_API_KEY, FATHOM_API_KEY_2, _CHRISTIAN... (env de CI + fichero local)
+    ks=[]
+    for k,v in os.environ.items():
+        if k.startswith("FATHOM_API_KEY") and (v or "").strip(): ks.append(v.strip())
+    p=os.path.expanduser("~/.natscholibre_secrets/fathom.env")
+    if os.path.exists(p):
+        for line in open(p):
+            m=re.match(r'(FATHOM_API_KEY[A-Za-z0-9_]*)\s*=\s*(\S.*)',line.strip())
+            if m: ks.append(m.group(2).strip())
+    seen=set(); out=[]
+    for k in ks:
+        if k and k not in seen: seen.add(k); out.append(k)
+    return out or [FKEY]
+FKEYS=fkeys()
 H=["-H",f"Authorization: Bearer {T}","-H","Version: 2021-07-28","-H","Accept: application/json"]
 HP=H+["-H","Content-Type: application/json"]
 CLOSING_CALS=["VRaGr4KGSZNiuDamyV4q","ODbNZytVDUxJxry4QzmX"]
@@ -63,27 +78,29 @@ if not cids:
 # 2) Fathom: transcripciones de CLOSING -> mapa por nombre
 # created_after limita a la ventana DAYS -> pocas paginas -> sin throttle
 _ca=(datetime.datetime.utcnow()-datetime.timedelta(days=DAYS+3)).strftime('%Y-%m-%dT%H:%M:%SZ')
-fmap={}; cur=None; _fails=0
-for _ in range(24):
-    u=f'https://api.fathom.ai/external/v1/meetings?include_transcript=true&limit=25&created_after={_ca}'+(f'&cursor={cur}' if cur else '')
-    d=cg(u,key=FKEY)
-    if "items" not in d:  # pagina fallida (throttle) -> reintentar, no cortar la paginacion en silencio
-        _fails+=1
-        if _fails>8: print("AVISO: Fathom fallo repetido, fmap parcial"); break
-        time.sleep(4); continue
-    for m in d.get("items",[]):
-        title=m.get("title") or ""
-        if not re.search(r'closing|planificaci|estrateg',title,re.I): continue
-        if re.search(r'triage|triaje|introducci|validaci',title,re.I): continue
-        KW=re.compile(r'reuni|planificaci|estrateg|closing|dr\.?|con ',re.I)
-        segs=[s.strip() for s in re.split(r'\s*-\s*',title) if s.strip()]
-        lead=next((s for s in segs if not KW.search(s)),segs[0] if segs else "")
-        if not lead: continue
-        tr=m.get("transcript") or []
-        txt="\n".join(f"{(t.get('speaker') or {}).get('display_name','?')}: {t.get('text','')}" for t in tr)
-        if txt: fmap[nkey(lead)]={"transcript":txt[:18000],"url":m.get("share_url") or m.get("url"),"toks":set(norm(lead)[:4])}
-    cur=d.get("next_cursor")
-    if not cur: break
+fmap={}
+for _FK in FKEYS:  # recorre cada cuenta de Fathom (David/Natalie + Christian...) y junta los closings
+    cur=None; _fails=0
+    for _ in range(24):
+        u=f'https://api.fathom.ai/external/v1/meetings?include_transcript=true&limit=25&created_after={_ca}'+(f'&cursor={cur}' if cur else '')
+        d=cg(u,key=_FK)
+        if "items" not in d:  # pagina fallida (throttle) -> reintentar, no cortar la paginacion en silencio
+            _fails+=1
+            if _fails>8: print("AVISO: Fathom fallo repetido, fmap parcial"); break
+            time.sleep(4); continue
+        for m in d.get("items",[]):
+            title=m.get("title") or ""
+            if not re.search(r'closing|planificaci|estrateg',title,re.I): continue
+            if re.search(r'triage|triaje|introducci|validaci',title,re.I): continue
+            KW=re.compile(r'reuni|planificaci|estrateg|closing|dr\.?|con ',re.I)
+            segs=[s.strip() for s in re.split(r'\s*-\s*',title) if s.strip()]
+            lead=next((s for s in segs if not KW.search(s)),segs[0] if segs else "")
+            if not lead: continue
+            tr=m.get("transcript") or []
+            txt="\n".join(f"{(t.get('speaker') or {}).get('display_name','?')}: {t.get('text','')}" for t in tr)
+            if txt: fmap[nkey(lead)]={"transcript":txt[:18000],"url":m.get("share_url") or m.get("url"),"toks":set(norm(lead)[:4])}
+        cur=d.get("next_cursor")
+        if not cur: break
 def match_lead(nombre):
     # 1) clave exacta de 2 tokens; 2) solape de tokens (>=2) -> robusto a nombre-vs-apellido distinto (ej. "Heber Eloy" vs "Heber Hualpa")
     fa=fmap.get(nkey(nombre))
