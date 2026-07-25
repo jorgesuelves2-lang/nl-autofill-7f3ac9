@@ -140,11 +140,16 @@ def fetch(cid):
     needs_triage=(bool(fa) or has_note or any(t.startswith("triage-") for t in tags)) and not (cf.get(F_ANALISIS_TRIAJE) or "").strip()
     if not (needs_setting or needs_triage): return None
     filled={cat.get(k,k):v for k,v in cf.items() if v not in (None,"") and not str(k).startswith("Analisis")}
+    # link de la grabacion: de la API de Fathom (David/Natalie) o, si no, del link pegado en la nota (cubre triajes de Christian)
+    notelink=None
+    for _n in notes_txt:
+        _m=re.search(r'https?://fathom\.video/(?:share|calls)/[A-Za-z0-9_-]+',_n or "")
+        if _m and (notelink is None or "/share/" in _m.group(0)): notelink=_m.group(0)
     return {"contact_id":cid,"nombre":nombre,"tags":tags,
             "needs_setting":needs_setting,"needs_triage":needs_triage,
             "campos_formulario":filled,"notas":notes_txt,
             "transcripcion_triaje": fa["transcript"] if fa else None,
-            "link_triaje": (fa.get("url") if fa else None)}
+            "link_triaje": (fa.get("url") if fa else None) or notelink}
 out=[]
 with ThreadPoolExecutor(max_workers=8) as ex:
     for r in ex.map(fetch,cids):
