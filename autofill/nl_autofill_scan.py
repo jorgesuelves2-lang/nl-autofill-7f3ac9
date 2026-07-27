@@ -123,6 +123,17 @@ for _FK in FKEYS:  # recorre cada cuenta de Fathom (David/Natalie + Christian...
         if not cur: break
 cat={f["id"]:f.get("name") for f in cg(f"https://services.leadconnectorhq.com/locations/{LOC}/customFields").get("customFields",[])}
 
+F_SETTER="lcFBOFN6VjZhvTgMFvuf"; _VS={"sary":"Sary","sara":"Sara","pablo":"Pablo","natalie":"Natalie"}
+def _setter(c,tags):
+    """Setter asignada: 1º utm_source del link de agenda (fiable), 2º etiquetas del contacto."""
+    cf={x.get("id"):x.get("value") for x in c.get("customFields",[])}
+    if (cf.get(F_SETTER) or "").strip(): return None  # ya lo tiene, no reescribir
+    utm=((c.get("lastAttributionSource") or {}).get("utmSource") or (c.get("attributionSource") or {}).get("utmSource") or "").strip().lower()
+    if _VS.get(utm): return _VS[utm]
+    for t in (tags or []):
+        tl=t.lower().replace("setter:","").strip()
+        if tl in _VS: return _VS[tl]
+    return None
 def fetch(cid):
     c=cg(f"https://services.leadconnectorhq.com/contacts/{cid}").get("contact",{})
     notes=cg(f"https://services.leadconnectorhq.com/contacts/{cid}/notes").get("notes",[])
@@ -149,7 +160,8 @@ def fetch(cid):
             "needs_setting":needs_setting,"needs_triage":needs_triage,
             "campos_formulario":filled,"notas":notes_txt,
             "transcripcion_triaje": fa["transcript"] if fa else None,
-            "link_triaje": (fa.get("url") if fa else None) or notelink}
+            "link_triaje": (fa.get("url") if fa else None) or notelink,
+            "setter": _setter(c,tags)}
 out=[]
 with ThreadPoolExecutor(max_workers=8) as ex:
     for r in ex.map(fetch,cids):
