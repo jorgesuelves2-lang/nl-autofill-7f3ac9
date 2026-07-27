@@ -11,7 +11,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,3 +24,10 @@ jobs:
           FATHOM_API_KEY: ${{ secrets.FATHOM_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python3 autofill/nl_autofill_run.py
+      - name: Rellenar Setter asignada (leads recientes)
+        if: always()
+        env:
+          GHL_TOKEN: ${{ secrets.GHL_TOKEN }}
+          GHL_LOCATION_ID: ${{ secrets.GHL_LOCATION_ID }}
+          DAYS: '7'
+        run: python3 autofill/fill_setter.py
