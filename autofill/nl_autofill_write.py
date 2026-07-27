@@ -15,7 +15,8 @@ H=["-H",f"Authorization: Bearer {T}","-H","Version: 2021-07-28","-H","Content-Ty
 F={"score_setting":"pmdl73DA4oYGPByvNdPE","analisis_setting":"bhgSTSIi5k9tCfiDQFD5",
    "score_triage":"BAdbcKq3A7Ks4kiaE9Vf","analisis_triaje":"tXb9dblrmzhtTZqdmBBj",
    "info_triaje":"N4HJDy9VFhKhGCpwJoAk",   # Información de Lead Triage (resumen que usa el email al closer)
-   "link_triaje":"EC5k5nHjjV9E5Vj6kkgp"}
+   "link_triaje":"EC5k5nHjjV9E5Vj6kkgp",
+   "setter":"lcFBOFN6VjZhvTgMFvuf"}       # Setter asignada (Sary/Sara/Pablo/Natalie) — se deduce en el scan
 def curl(m,u,b=None):
     c=["curl","-s","-X",m,u,*H]
     if b is not None: c+=["--data",json.dumps(b)]  # ensure_ascii=True
