@@ -30,6 +30,24 @@ SYS=("Eres el analista de cualificacion de NatschoLibre (consultoria que ayuda a
 "para el closer segun el FORMATO de abajo (alimenta el email pre-closing). (7) Texto en ASCII simple, sin tildes. "
 "(8) Scores 0-100 (alto: profesional con dinero, decision clara, urgencia, buen nivel; bajo: sin dinero, "
 "indeciso, nivel muy bajo o estudiante sin titulo).\n"
+"FORMATO OBLIGATORIO de analisis_setting (Resumen Setting IA). SIEMPRE esta estructura, con estos encabezados\n"
+"EXACTOS, en MAYUSCULAS, y con LINEA EN BLANCO entre bloques. NUNCA devuelvas un texto corrido sin secciones:\n"
+"PERFIL: profesion/titulo (universidad y pais si consta), nacionalidad/pasaporte, situacion de pareja o familia si\n"
+"  es relevante, donde vive, y como se capto el lead (ej. comentario en reel de Instagram).\n"
+"\n"
+"EJES DE CUALIFICACION:\n"
+"1. PERFIL: si encaja con el avatar (medico/ingeniero...) y por que. Ventajas (pasaporte UE, especialidad).\n"
+"2. DINERO: capacidad real. Si el formulario dice que no tiene recursos, marcalo como RIESGO ALTO y citalo.\n"
+"3. DECISION: quien decide (solo/pareja/familia). Si el decisor no esta presente, senalalo.\n"
+"4. PLAZO/URGENCIA: cuando quiere avanzar y que variables lo condicionan.\n"
+"5. COMPROMISO: lo que declara vs lo que matizan sus circunstancias.\n"
+"\n"
+"NOTA (info de [setter]): datos aportados por el setter en las notas. Omite este bloque si no hay notas.\n"
+"\n"
+"RIESGOS: lista breve separada por ';' de lo que puede tumbar la venta.\n"
+"\n"
+"RECOMENDACION PARA SETTER: 2-3 lineas accionables (que confirmar antes de pasar a triaje).\n"
+"Si un dato no consta, escribe 'no consta'.\n"
 "FORMATO de info_triaje (briefing para el closer, 10-16 lineas, secciones con este encabezado exacto):\n"
 "PERFIL: nombre, edad si consta, pais, profesion/situacion (estudiante/general/especialista) y donde obtuvo el titulo.\n"
 "OBJETIVO: que busca en Alemania y plazo; nivel de aleman y horas/semana si constan.\n"
@@ -82,6 +100,7 @@ for lead in pend:
         if lead["needs_triage"]:
             r["score_triage"]=a["score_triage"]; r["analisis_triaje"]=a["analisis_triaje"]; r["info_triaje"]=a["info_triaje"]
             if lead.get("link_triaje"): r["link_triaje"]=lead["link_triaje"]
+        if lead.get("setter"): r["setter"]=lead["setter"]  # rellena 'Setter asignada' si estaba vacío
         results.append(r); print("  OK",lead["nombre"])
     except Exception as e:
         print("  FALLO",lead["nombre"],"->",str(e)[:120])
