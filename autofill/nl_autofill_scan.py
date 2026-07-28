@@ -76,16 +76,19 @@ if not BACKLOG:
         for c in cs: add(c["id"])
         if len(cs)<100: break
         page+=1
-# calendario: SIEMPRE (ventana corta en modo normal, DAYS en backlog) -> nada queda sin analizar
+# calendario: SIEMPRE (ventana corta en modo normal, DAYS en backlog) -> nada queda sin analizar.
+# Incluimos citas FUTURAS (agendadas aun sin celebrar): el resumen de SETTING no necesita que la
+# llamada haya ocurrido -> se genera en cuanto el lead agenda el triaje (fix 28-jul: antes solo
+# procesaba citas ya pasadas, asi el setting no aparecia hasta despues de la llamada de triaje).
+# La parte de TRIAJE no se adelanta: needs_triage exige transcripcion/nota, que aun no existe.
 win=DAYS if BACKLOG else int(os.environ.get("SAFETY_DAYS","10"))
 now=int(datetime.datetime.now(datetime.timezone.utc).timestamp()*1000); cut=now-win*86400*1000
-ev=cg(f"https://services.leadconnectorhq.com/calendars/events?locationId={LOC}&calendarId={TRIAGE_CAL}&startTime={cut}&endTime={now}").get("events",[])
+fut=now+45*86400*1000  # incluir citas agendadas de las proximas ~6 semanas
+ev=cg(f"https://services.leadconnectorhq.com/calendars/events?locationId={LOC}&calendarId={TRIAGE_CAL}&startTime={cut}&endTime={fut}").get("events",[])
 ev_title={}  # cid -> nombre del titulo del evento (para casar Fathom si el contacto es un duplicado sin nombre)
 _TKW=re.compile(r'reuni|introducci|validaci|triage|triaje|llamada|con natalie|dr\.?',re.I)
 for e in ev:
-    st=e.get("startTime")
-    if st and str(st)>datetime.datetime.utcnow().isoformat(): continue  # solo citas ya pasadas
-    cid=e.get("contactId"); add(cid)
+    cid=e.get("contactId"); add(cid)  # futuras incluidas (setting); needs_triage sigue gateado por transcripcion
     if cid:
         segs=[s.strip() for s in re.split(r'\s*-\s*',e.get("title") or "") if s.strip()]
         nm=next((s for s in segs if not _TKW.search(s)),"")
