@@ -35,7 +35,11 @@ FKEYS=fkeys()
 H=["-H",f"Authorization: Bearer {T}","-H","Version: 2021-07-28","-H","Accept: application/json"]
 HP=H+["-H","Content-Type: application/json"]
 TRIAGE_CAL="2EY5mRYqpaAx4qfnsWJM"; DAYS=30
-READY_TAG="triaje-listo"; DONE_TAG="claude-analizado"
+# Etiquetas que marcan "listo para analizar":
+#  - setting-listo : la pone el workflow 01 al AGENDAR el triaje (1 min) -> resumen de SETTING antes de la llamada
+#  - triaje-listo  : la pone el workflow 04 tras el formulario post-llamada -> añade el analisis de TRIAJE
+# El scan descubre ambas; needs_setting/needs_triage deciden que se rellena segun los datos disponibles.
+READY_TAGS=["setting-listo","triaje-listo"]; DONE_TAG="claude-analizado"
 F_ANALISIS_SETTING="bhgSTSIi5k9tCfiDQFD5"; F_ANALISIS_TRIAJE="tXb9dblrmzhtTZqdmBBj"
 BACKLOG="--backlog" in sys.argv
 OUT="/tmp/nl_autofill_pending.json"
@@ -69,13 +73,14 @@ seen=set(); cids=[]
 def add(c):
     if c and c not in seen: seen.add(c); cids.append(c)
 if not BACKLOG:
-    page=1
-    while True:
-        d=csearch({"locationId":LOC,"page":page,"pageLimit":100,"filters":[{"field":"tags","operator":"eq","value":READY_TAG}]})
-        cs=d.get("contacts",[])
-        for c in cs: add(c["id"])
-        if len(cs)<100: break
-        page+=1
+    for _tag in READY_TAGS:
+        page=1
+        while True:
+            d=csearch({"locationId":LOC,"page":page,"pageLimit":100,"filters":[{"field":"tags","operator":"eq","value":_tag}]})
+            cs=d.get("contacts",[])
+            for c in cs: add(c["id"])
+            if len(cs)<100: break
+            page+=1
 # calendario: SIEMPRE (ventana corta en modo normal, DAYS en backlog) -> nada queda sin analizar.
 # Incluimos citas FUTURAS (agendadas aun sin celebrar): el resumen de SETTING no necesita que la
 # llamada haya ocurrido -> se genera en cuanto el lead agenda el triaje (fix 28-jul: antes solo
