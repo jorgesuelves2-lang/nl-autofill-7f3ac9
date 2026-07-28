@@ -20,5 +20,6 @@ jobs:
           GHL_TOKEN: ${{ secrets.GHL_TOKEN }}
           GHL_LOCATION_ID: ${{ secrets.GHL_LOCATION_ID }}
           FATHOM_API_KEY: ${{ secrets.FATHOM_API_KEY }}
+          FATHOM_API_KEY_CHRISTIAN: ${{ secrets.FATHOM_API_KEY_CHRISTIAN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python3 autofill/nl_closing_run.py
