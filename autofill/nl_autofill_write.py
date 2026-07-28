@@ -34,8 +34,8 @@ for r in res:
     if r.get("nota"):
         curl("POST",f"https://services.leadconnectorhq.com/contacts/{cid}/notes",{"body":r["nota"]})
     curl("POST",f"https://services.leadconnectorhq.com/contacts/{cid}/tags",{"tags":r.get("tags",["claude-analizado"])})
-    # quitar la etiqueta de "listo" para que no se reprocese (modo evento Nivel 2)
-    curl("DELETE",f"https://services.leadconnectorhq.com/contacts/{cid}/tags",{"tags":["triaje-listo"]})
+    # quitar las etiquetas de "listo" ya procesadas para que no se reprocesen (modo evento Nivel 2)
+    curl("DELETE",f"https://services.leadconnectorhq.com/contacts/{cid}/tags",{"tags":["triaje-listo","setting-listo"]})
     ok+=1
     print("OK",cid,"setting" if r.get("analisis_setting") else "","triaje" if r.get("analisis_triaje") else "")
 print(f"\nEscritos: {ok}/{len(res)}")
