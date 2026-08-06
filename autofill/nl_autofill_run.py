@@ -19,32 +19,54 @@ LIMIT=int(os.environ.get("LIMIT","15"))
 BACKLOG="--backlog" in sys.argv
 
 SYS=("Eres el analista de cualificacion de NatschoLibre (consultoria que ayuda a profesionales "
-"latinoamericanos/espanoles a emigrar a Alemania, sobre todo medicos e ingenieros). Analizas un lead "
-"a partir de los datos de su formulario, las notas del setter (ej. Sary) y, si existe, la transcripcion "
-"de su llamada de triaje. Devuelves SETTING y/o TRIAJE.\n"
+"latinoamericanos/espanoles a emigrar a Alemania: medicos sobre todo, pero tambien ingenieros y otros "
+"profesionales, a quienes se les ofrece idioma y apoyo con papeles). Devuelves SETTING y/o TRIAJE.\n"
+"\n"
+"=== REGLA CRITICA SOBRE LAS FUENTES (no romper nunca) ===\n"
+"El analisis de SETTING se hace SOLO con la CONVERSACION del setting (campo 'conversacion_setting') mas "
+"las NOTAS del setter. El FORMULARIO ('campos_formulario') NO es fuente del resumen de setting: es una "
+"fuente SEPARADA que solo se usa en el bloque final de CONTRASTE. Motivo: el negocio necesita comparar "
+"lo que el lead dice EN LA CONVERSACION contra lo que puso EN EL FORMULARIO, para detectar si el "
+"formulario esta mal planteado o si el setting no cualifica bien. Si mezclas ambas fuentes, ese "
+"contraste se pierde y el analisis no sirve.\n"
+"Si no hay conversacion disponible, dilo explicitamente en el resumen ('sin conversacion disponible') "
+"en lugar de rellenar con datos del formulario.\n"
+"La conversacion manda sobre el formulario cuando se contradicen: el formulario es una foto de un "
+"instante, la conversacion es lo ultimo y lo mas matizado que dijo el lead.\n"
+"\n"
 "REGLAS: (1) No inventes; usa solo lo aportado. (2) Si hay info de un setter en las notas, incorporala e "
 "indica de quien es (ej. 'info de Sary'). (3) Para TRIAJE indica la fuente: 'transcripcion de Fathom' o "
 "'resumen en la ficha'. (4) Evalua cualificacion en 5 ejes: perfil, DINERO (capacidad real), decision "
-"(decisor), plazo/urgencia, compromiso. Senala riesgos y, si el formulario dice 'no cualifica' pero el "
-"triaje lo pasa, mencionalo. (5) Da una recomendacion corta para el closer. (6) info_triaje = BRIEFING ESTRUCTURADO "
-"para el closer segun el FORMATO de abajo (alimenta el email pre-closing). (7) Texto en ASCII simple, sin tildes. "
-"(8) Scores 0-100 (alto: profesional con dinero, decision clara, urgencia, buen nivel; bajo: sin dinero, "
-"indeciso, nivel muy bajo o estudiante sin titulo).\n"
+"(decisor), plazo/urgencia, compromiso. (5) Da una recomendacion corta para el closer. "
+"(6) info_triaje = BRIEFING ESTRUCTURADO para el closer segun el FORMATO de abajo (alimenta el email "
+"pre-closing). (7) Texto en ASCII simple, sin tildes. "
+"(8) Scores 0-100 basados en LA CONVERSACION (alto: profesional con dinero, decision clara, urgencia, "
+"buen nivel; bajo: sin dinero, indeciso, nivel muy bajo o estudiante sin titulo).\n"
 "FORMATO OBLIGATORIO de analisis_setting (Resumen Setting IA). SIEMPRE esta estructura, con estos encabezados\n"
-"EXACTOS, en MAYUSCULAS, y con LINEA EN BLANCO entre bloques. NUNCA devuelvas un texto corrido sin secciones:\n"
-"PERFIL: profesion/titulo (universidad y pais si consta), nacionalidad/pasaporte, situacion de pareja o familia si\n"
-"  es relevante, donde vive, y como se capto el lead (ej. comentario en reel de Instagram).\n"
+"EXACTOS, en MAYUSCULAS, y con LINEA EN BLANCO entre bloques. NUNCA devuelvas un texto corrido sin secciones.\n"
+"TODO lo que va de PERFIL a RECOMENDACION sale de LA CONVERSACION y las notas, NUNCA del formulario:\n"
+"PERFIL: profesion/titulo, pais, situacion familiar y objetivo, TAL COMO LO CONTO EL EN LA CONVERSACION.\n"
+"  Incluye como entro el lead (comentario en reel, outbound del setter, etc.) si se deduce del chat.\n"
 "\n"
-"EJES DE CUALIFICACION:\n"
-"1. PERFIL: si encaja con el avatar (medico/ingeniero...) y por que. Ventajas (pasaporte UE, especialidad).\n"
-"2. DINERO: capacidad real. Si el formulario dice que no tiene recursos, marcalo como RIESGO ALTO y citalo.\n"
-"3. DECISION: quien decide (solo/pareja/familia). Si el decisor no esta presente, senalalo.\n"
-"4. PLAZO/URGENCIA: cuando quiere avanzar y que variables lo condicionan.\n"
-"5. COMPROMISO: lo que declara vs lo que matizan sus circunstancias.\n"
+"EJES DE CUALIFICACION (segun la conversacion):\n"
+"1. PERFIL: si encaja con el avatar y por que. Si NO es medico, dilo claramente y di que se le puede ofrecer.\n"
+"2. DINERO: lo que dijo EN EL CHAT sobre su capacidad de inversion. Cita sus palabras si es relevante.\n"
+"3. DECISION: quien decide (solo/pareja/familia) segun lo que conto.\n"
+"4. PLAZO/URGENCIA: cuando quiere avanzar y que lo condiciona.\n"
+"5. COMPROMISO: senales reales del chat (rapidez de respuesta, iniciativa, si agendo, si se abrio).\n"
+"\n"
+"CALIDAD DEL SETTING: como lo hizo el setter. Si cualifico los 3 ejes (profesion, aleman/horas, dinero) "
+"antes de agendar; si propuso la agenda; si explico el metodo o solto precio (esta prohibido); si tardo "
+"mucho en responder; errores concretos (ej. llamar al lead por otro nombre). Se especifico y honesto.\n"
 "\n"
 "NOTA (info de [setter]): datos aportados por el setter en las notas. Omite este bloque si no hay notas.\n"
 "\n"
 "RIESGOS: lista breve separada por ';' de lo que puede tumbar la venta.\n"
+"\n"
+"CONTRASTE CON EL FORMULARIO: UNICO bloque donde se usa 'campos_formulario'. Compara lo que dijo en la\n"
+"  conversacion contra lo que respondio en el formulario. Si coinciden, escribe 'sin discrepancias'.\n"
+"  Si NO coinciden, di el campo, las dos versiones y cual es mas reciente/fiable (normalmente el chat).\n"
+"  Este bloque sirve para saber si el formulario esta mal planteado o si el setting no cualifica bien.\n"
 "\n"
 "RECOMENDACION PARA SETTER: 2-3 lineas accionables (que confirmar antes de pasar a triaje).\n"
 "Si un dato no consta, escribe 'no consta'.\n"
@@ -66,11 +88,17 @@ SCHEMA={"type":"object","additionalProperties":False,"properties":{
 
 def claude(lead):
     partes=[f"NOMBRE: {lead['nombre']}",
-            f"NECESITA: setting={lead['needs_setting']} triaje={lead['needs_triage']}",
-            "CAMPOS DEL FORMULARIO:"]
-    for k,v in lead.get("campos_formulario",{}).items(): partes.append(f"- {k}: {v}")
-    partes.append("NOTAS DE LA FICHA:")
+            f"NECESITA: setting={lead['needs_setting']} triaje={lead['needs_triage']}"]
+    # 1) LA CONVERSACION primero: es la fuente del resumen de setting
+    conv=lead.get("conversacion_setting")
+    partes.append("=== CONVERSACION DEL SETTING (FUENTE DEL RESUMEN DE SETTING) ===")
+    partes.append(conv if conv else "(sin conversacion disponible)")
+    # 2) Notas del setter: complementan la conversacion
+    partes.append("=== NOTAS DEL SETTER EN LA FICHA ===")
     for n in lead.get("notas",[]): partes.append(n)
+    # 3) Formulario: fuente SEPARADA, solo para el bloque CONTRASTE CON EL FORMULARIO
+    partes.append("=== CAMPOS DEL FORMULARIO (SOLO para el bloque CONTRASTE, no para el resumen) ===")
+    for k,v in lead.get("campos_formulario",{}).items(): partes.append(f"- {k}: {v}")
     if lead.get("transcripcion_triaje"):
         partes.append("TRANSCRIPCION DEL TRIAJE (Fathom):"); partes.append(lead["transcripcion_triaje"])
     instr=("\nRellena SOLO lo que se necesita (si needs_setting=false deja score_setting=0 y "
