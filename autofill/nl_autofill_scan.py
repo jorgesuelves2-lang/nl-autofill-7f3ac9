@@ -131,6 +131,40 @@ for _FK in FKEYS:  # recorre cada cuenta de Fathom (David/Natalie + Christian...
         if not cur: break
 cat={f["id"]:f.get("name") for f in cg(f"https://services.leadconnectorhq.com/locations/{LOC}/customFields").get("customFields",[])}
 
+H0415=["-H",f"Authorization: Bearer {T}","-H","Version: 2021-04-15","-H","Accept: application/json"]
+def _conversacion(cid, max_msgs=120):
+    """Descarga el chat REAL del setting (DM de IG/FB + WhatsApp) en orden cronologico.
+    Es la UNICA fuente valida del resumen de setting: el formulario se analiza aparte
+    para poder contrastar ambos (fix 5-ago-2026)."""
+    try:
+        r=subprocess.run(["curl","-s","-m","30","-G","https://services.leadconnectorhq.com/conversations/search",
+            "--data-urlencode",f"locationId={LOC}","--data-urlencode",f"contactId={cid}",
+            "--data-urlencode","limit=5",*H0415],capture_output=True,text=True).stdout
+        convs=json.loads(r).get("conversations",[])
+    except Exception:
+        return None
+    out=[]
+    for c in convs:
+        try:
+            m=subprocess.run(["curl","-s","-m","30","-G",
+                f"https://services.leadconnectorhq.com/conversations/{c['id']}/messages",
+                "--data-urlencode","limit=100",*H0415],capture_output=True,text=True).stdout
+            mm=json.loads(m).get("messages",{})
+            msgs=mm.get("messages",[]) if isinstance(mm,dict) else (mm or [])
+        except Exception:
+            continue
+        for x in msgs:
+            if x.get("messageType") not in ("TYPE_INSTAGRAM","TYPE_FACEBOOK","TYPE_WHATSAPP","TYPE_SMS"): continue
+            body=(x.get("body") or "").strip()
+            if not body: continue
+            out.append({"t":str(x.get("dateAdded"))[:16],
+                        "quien":"SETTER" if x.get("direction")=="outbound" else "LEAD",
+                        "texto":body[:800]})
+    out.sort(key=lambda z:z["t"])
+    if not out: return None
+    out=out[-max_msgs:]
+    return "\n".join(f"[{z['t']}] {z['quien']}: {z['texto']}" for z in out)
+
 F_SETTER="lcFBOFN6VjZhvTgMFvuf"; _VS={"sary":"Sary","sara":"Sara","pablo":"Pablo","natalie":"Natalie"}
 def _setter(c,tags):
     """Setter asignada: 1º utm_source del link de agenda (fiable), 2º etiquetas del contacto."""
@@ -166,6 +200,7 @@ def fetch(cid):
         if _m and (notelink is None or "/share/" in _m.group(0)): notelink=_m.group(0)
     return {"contact_id":cid,"nombre":nombre,"tags":tags,
             "needs_setting":needs_setting,"needs_triage":needs_triage,
+            "conversacion_setting": _conversacion(cid),   # FUENTE REAL del resumen de setting
             "campos_formulario":filled,"notas":notes_txt,
             "transcripcion_triaje": fa["transcript"] if fa else None,
             "link_triaje": (fa.get("url") if fa else None) or notelink,
