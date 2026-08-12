@@ -35,8 +35,9 @@ SYS=("Eres el analista de cualificacion de NatschoLibre (consultoria que ayuda a
 "instante, la conversacion es lo ultimo y lo mas matizado que dijo el lead.\n"
 "\n"
 "REGLAS: (1) No inventes; usa solo lo aportado. (2) Si hay info de un setter en las notas, incorporala e "
-"indica de quien es (ej. 'info de Sary'). (3) Para TRIAJE indica la fuente: 'transcripcion de Fathom' o "
-"'resumen en la ficha'. (4) Evalua cualificacion en 5 ejes: perfil, DINERO (capacidad real), decision "
+"indica de quien es (ej. 'info de Sary'). (3) El TRIAJE se analiza SOLO con la TRANSCRIPCION de la "
+"llamada de triaje (Fathom). La ficha, las notas y el formulario NUNCA son fuente del analisis de triaje: "
+"si no hay transcripcion, no hay analisis de triaje. (4) Evalua cualificacion en 5 ejes: perfil, DINERO (capacidad real), decision "
 "(decisor), plazo/urgencia, compromiso. (5) Da una recomendacion corta para el closer. "
 "(6) info_triaje = BRIEFING ESTRUCTURADO para el closer segun el FORMATO de abajo (alimenta el email "
 "pre-closing). (7) Texto en ASCII simple, sin tildes. "
@@ -123,9 +124,16 @@ print(f"Analizando {len(pend)} leads con {MODEL}...")
 results=[]
 for lead in pend:
     try:
+        # NORMA: el triaje SOLO se analiza con la transcripcion de la llamada.
+        # Sin grabacion -> no se analiza: se deja el marcador y el scan lo reintentara cuando llegue la grabacion.
+        tri_sin_grabacion = lead["needs_triage"] and not lead.get("transcripcion_triaje")
+        if tri_sin_grabacion: lead["needs_triage"]=False
         a=claude(lead); r={"contact_id":lead["contact_id"],"tags":["claude-analizado"]}
         if lead["needs_setting"]: r["score_setting"]=a["score_setting"]; r["analisis_setting"]=a["analisis_setting"]
-        if lead["needs_triage"]:
+        if tri_sin_grabacion:
+            r["analisis_triaje"]="NO HAY GRABACION"
+            if lead.get("link_triaje"): r["link_triaje"]=lead["link_triaje"]
+        elif lead["needs_triage"]:
             r["score_triage"]=a["score_triage"]; r["analisis_triaje"]=a["analisis_triaje"]; r["info_triaje"]=a["info_triaje"]
             if lead.get("link_triaje"): r["link_triaje"]=lead["link_triaje"]
         if lead.get("setter"): r["setter"]=lead["setter"]  # rellena 'Setter asignada' si estaba vacío
