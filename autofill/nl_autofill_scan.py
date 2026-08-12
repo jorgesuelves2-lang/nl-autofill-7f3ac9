@@ -190,7 +190,9 @@ def fetch(cid):
     fa=fmap.get(nkey(nombre)) or (fmap.get(nkey(titulo)) if titulo else None)  # respaldo: casar por el titulo del evento
     has_note=any(("contexto del prospecto" in n.lower() or "fathom.video/share" in n.lower()) for n in notes_txt)
     needs_setting=not (cf.get(F_ANALISIS_SETTING) or "").strip()
-    needs_triage=(bool(fa) or has_note or any(t.startswith("triage-") for t in tags)) and not (cf.get(F_ANALISIS_TRIAJE) or "").strip()
+    _tri=(cf.get(F_ANALISIS_TRIAJE) or "").strip()
+    # vacio o "NO HAY GRABACION" cuentan como pendiente: cuando aparezca la grabacion se analiza de verdad
+    needs_triage=(bool(fa) or has_note or any(t.startswith("triage-") for t in tags)) and (not _tri or _tri.upper().startswith("NO HAY GRABACION"))
     if not (needs_setting or needs_triage): return None
     filled={cat.get(k,k):v for k,v in cf.items() if v not in (None,"") and not str(k).startswith("Analisis")}
     # link de la grabacion: de la API de Fathom (David/Natalie) o, si no, del link pegado en la nota (cubre triajes de Christian)
