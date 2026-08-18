@@ -129,7 +129,7 @@ subprocess.run(["python3",os.path.join(HERE,"nl_autofill_scan.py")]+(["--backlog
 pend=json.load(open("/tmp/nl_autofill_pending.json")) if os.path.exists("/tmp/nl_autofill_pending.json") else []
 pend=pend[:LIMIT]
 print(f"Analizando {len(pend)} leads con {MODEL}...")
-results=[]
+results=[]; fallos=0
 for lead in pend:
     try:
         # NORMA: el triaje SOLO se analiza con la transcripcion de la llamada.
@@ -147,10 +147,15 @@ for lead in pend:
         if lead.get("setter"): r["setter"]=lead["setter"]  # rellena 'Setter asignada' si estaba vacío
         results.append(r); print("  OK",lead["nombre"])
     except Exception as e:
-        print("  FALLO",lead["nombre"],"->",str(e)[:120])
+        fallos+=1; print("  FALLO",lead["nombre"],"->",str(e)[:120])
 json.dump(results,open("/tmp/nl_autofill_results.json","w"),ensure_ascii=False)
 # 2) escribir
 if results:
     subprocess.run(["python3",os.path.join(HERE,"nl_autofill_write.py")],check=True)
 else:
     print("Nada que escribir.")
+# Alerta: si hubo fallos y no se escribio nada, salir con error para que GitHub Actions
+# marque el run en rojo y avise por email (antes el motor moria en silencio con exit 0).
+if fallos and not results:
+    print(f"ERROR: {fallos} leads fallaron y 0 escritos — revisar credito API / conectividad.")
+    sys.exit(1)
