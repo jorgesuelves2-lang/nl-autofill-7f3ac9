@@ -34,7 +34,8 @@ def fkeys():
 FKEYS=fkeys()
 H=["-H",f"Authorization: Bearer {T}","-H","Version: 2021-07-28","-H","Accept: application/json"]
 HP=H+["-H","Content-Type: application/json"]
-TRIAGE_CAL="2EY5mRYqpaAx4qfnsWJM"; DAYS=30
+# OJO 18-ago-2026: DOS calendarios de triaje activos en paralelo; leer siempre los dos.
+TRIAGE_CALS=["2EY5mRYqpaAx4qfnsWJM","1kHWabxSmIJSHTfdr7s5"]; DAYS=30
 # Etiquetas que marcan "listo para analizar":
 #  - setting-listo : la pone el workflow 01 al AGENDAR el triaje (1 min) -> resumen de SETTING antes de la llamada
 #  - triaje-listo  : la pone el workflow 04 tras el formulario post-llamada -> añade el analisis de TRIAJE
@@ -89,7 +90,9 @@ if not BACKLOG:
 win=DAYS if BACKLOG else int(os.environ.get("SAFETY_DAYS","10"))
 now=int(datetime.datetime.now(datetime.timezone.utc).timestamp()*1000); cut=now-win*86400*1000
 fut=now+45*86400*1000  # incluir citas agendadas de las proximas ~6 semanas
-ev=cg(f"https://services.leadconnectorhq.com/calendars/events?locationId={LOC}&calendarId={TRIAGE_CAL}&startTime={cut}&endTime={fut}").get("events",[])
+ev=[]
+for _tc in TRIAGE_CALS:
+    ev+=cg(f"https://services.leadconnectorhq.com/calendars/events?locationId={LOC}&calendarId={_tc}&startTime={cut}&endTime={fut}").get("events",[])
 ev_title={}  # cid -> nombre del titulo del evento (para casar Fathom si el contacto es un duplicado sin nombre)
 _TKW=re.compile(r'reuni|introducci|validaci|triage|triaje|llamada|con natalie|dr\.?',re.I)
 for e in ev:
@@ -165,7 +168,7 @@ def _conversacion(cid, max_msgs=120):
     out=out[-max_msgs:]
     return "\n".join(f"[{z['t']}] {z['quien']}: {z['texto']}" for z in out)
 
-F_SETTER="lcFBOFN6VjZhvTgMFvuf"; _VS={"sary":"Sary","sara":"Sara","pablo":"Pablo","natalie":"Natalie"}
+F_SETTER="lcFBOFN6VjZhvTgMFvuf"; _VS={"sary":"Sary","sara":"Sara","jesmary":"Jesmary","pablo":"Pablo","natalie":"Natalie"}
 def _setter(c,tags):
     """Setter asignada: 1º utm_source del link de agenda (fiable), 2º etiquetas del contacto."""
     cf={x.get("id"):x.get("value") for x in c.get("customFields",[])}
