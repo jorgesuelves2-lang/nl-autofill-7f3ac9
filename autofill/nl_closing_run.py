@@ -32,7 +32,8 @@ def fkeys():
 FKEYS=fkeys()
 H=["-H",f"Authorization: Bearer {T}","-H","Version: 2021-07-28","-H","Accept: application/json"]
 HP=H+["-H","Content-Type: application/json"]
-CLOSING_CALS=["VRaGr4KGSZNiuDamyV4q","ODbNZytVDUxJxry4QzmX"]
+# 18-ago-2026: ODbNZytVDUxJxry4QzmX esta BORRADO en GHL (400); se sustituye por 998ij (closing post-triaje /agenda-valida)
+CLOSING_CALS=["VRaGr4KGSZNiuDamyV4q","998ij1w7jUrmPqJZu43V"]
 DAYS=int(os.environ.get("CLOSING_DAYS","45")); LIMIT=int(os.environ.get("LIMIT","15"))
 MODEL="claude-sonnet-4-6"
 # campos de closing
