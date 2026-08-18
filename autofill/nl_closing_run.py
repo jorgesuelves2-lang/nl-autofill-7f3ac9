@@ -182,3 +182,7 @@ for p in pend:
     except Exception as e:
         print("  FALLO",p["nombre"],"->",str(e)[:120])
 print(f"Escritos: {ok}/{len(pend)}")
+# Alerta anti-fallo-silencioso: con pendientes y 0 escritos, salir en rojo para que GitHub avise por email.
+if pend and ok==0:
+    print("ERROR: habia pendientes y no se escribio ninguno — revisar credito API / conectividad.")
+    sys.exit(1)
