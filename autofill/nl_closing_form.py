@@ -74,19 +74,6 @@ def num(v):
     try: return float(re.sub(r"[^0-9.,]","",str(v)).replace(",","."))
     except: return 0.0
 
-def etapa(res,ticket,pagado_todo):
-    r=(res or "").strip().lower()
-    if r.startswith("vendido"):
-        # ticket >= 4.250 -> oferta de 5.000 ; por debajo -> oferta de 3.500
-        alto = ticket>=CORTE_C5K
-        if pagado_todo: return ST["C5K_OK"] if alto else ST["C35K_OK"]
-        return ST["C5K_FALTA"] if alto else ST["C35K_FALTA"]
-    if "seguimiento" in r: return ST["SEG"]
-    if "no show" in r or "noshow" in r: return ST["NOSHOW"]
-    if "no confirma" in r or "cancelad" in r: return ST["NOCONF"]
-    if "descartad" in r: return ST["DESC"]
-    return None
-
 subs=[]; pg=1
 while True:
     d=req("GET",f"https://services.leadconnectorhq.com/forms/submissions?locationId={LOC}&formId={FORM}&limit=100&page={pg}")
