@@ -203,8 +203,15 @@ def fetch(cid):
     has_note=any(("contexto del prospecto" in n.lower() or "fathom.video/share" in n.lower()) for n in notes_txt)
     needs_setting=not (cf.get(F_ANALISIS_SETTING) or "").strip()
     _tri=(cf.get(F_ANALISIS_TRIAJE) or "").strip()
-    # vacio o "NO HAY GRABACION" cuentan como pendiente: cuando aparezca la grabacion se analiza de verdad
-    needs_triage=(bool(fa) or has_note or any(t.startswith("triage-") for t in tags)) and (not _tri or _tri.upper().startswith("NO HAY GRABACION"))
+    _ya_marcado=bool(_tri) and _tri.upper().startswith("NO HAY GRABACION")
+    # Pendiente de triaje si hubo señal de triaje (Fathom/nota/tag) Y ademas una de estas:
+    #  - nunca se analizo (campo vacio), o
+    #  - ya estaba "NO HAY GRABACION" pero AHORA hay grabacion real en Fathom (reactivar), o
+    #  - estamos en barrido manual (--backlog): se recomprueban todos por si aparecio grabacion.
+    # (Corregido 20-ago-2026: antes un "NO HAY GRABACION" reentraba en CADA pasada aunque no hubiera
+    #  grabacion nueva, lo que reanalizaba a los mismos leads sin fin y agotaba el credito de la API.)
+    needs_triage=(bool(fa) or has_note or any(t.startswith("triage-") for t in tags)) and (
+        (not _tri) or (bool(fa) and _ya_marcado) or (BACKLOG and _ya_marcado))
     if not (needs_setting or needs_triage): return None
     filled={cat.get(k,k):v for k,v in cf.items() if v not in (None,"") and k not in NO_FORM}
     # link de la grabacion: de la API de Fathom (David/Natalie) o, si no, del link pegado en la nota (cubre triajes de Christian)
@@ -214,6 +221,7 @@ def fetch(cid):
         if _m and (notelink is None or "/share/" in _m.group(0)): notelink=_m.group(0)
     return {"contact_id":cid,"nombre":nombre,"tags":tags,
             "needs_setting":needs_setting,"needs_triage":needs_triage,
+            "triaje_ya_marcado":_ya_marcado,
             "conversacion_setting": _conversacion(cid),   # FUENTE REAL del resumen de setting
             "campos_formulario":filled,"notas":notes_txt,
             "transcripcion_triaje": fa["transcript"] if fa else None,
