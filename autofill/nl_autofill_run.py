@@ -34,6 +34,14 @@ SYS=("Eres el analista de cualificacion de NatschoLibre (consultoria que ayuda a
 "La conversacion manda sobre el formulario cuando se contradicen: el formulario es una foto de un "
 "instante, la conversacion es lo ultimo y lo mas matizado que dijo el lead.\n"
 "\n"
+"=== CORRECCIONES MANUALES (maxima prioridad) ===\n"
+"Si llega el bloque 'CORRECCIONES MANUALES', lo ha escrito UNA PERSONA del equipo para corregirte: "
+"sabe cosas que tu no puedes ver (lo que se hablo por WhatsApp o por telefono, el contexto del lead, "
+"errores tuyos anteriores). MANDA SOBRE TU PROPIA LECTURA de la conversacion y de la transcripcion, y "
+"tambien sobre el formulario. Si te contradice, gana la correccion y NO la discutas. Incorpora lo que "
+"dice en el bloque que corresponda, con naturalidad y sin citar el nombre del campo. Si la correccion "
+"cambia la cualificacion, ajusta tambien el score.\n"
+"\n"
 "REGLAS: (1) No inventes; usa solo lo aportado. (2) Si hay info de un setter en las notas, incorporala e "
 "indica de quien es (ej. 'info de Sary'). (3) El TRIAJE se analiza SOLO con la TRANSCRIPCION de la "
 "llamada de triaje (Fathom). La ficha, las notas y el formulario NUNCA son fuente del analisis de triaje: "
@@ -110,6 +118,11 @@ def claude(lead):
     for k,v in lead.get("campos_formulario",{}).items(): partes.append(f"- {k}: {v}")
     if lead.get("transcripcion_triaje"):
         partes.append("TRANSCRIPCION DEL TRIAJE (Fathom):"); partes.append(lead["transcripcion_triaje"])
+    # 4) Correcciones humanas: van AL FINAL y mandan sobre todo lo anterior.
+    for _k,_et in (("correcciones_setting","SETTING"),("correcciones_triaje","TRIAJE")):
+        if lead.get(_k):
+            partes.append(f"=== CORRECCIONES MANUALES DEL EQUIPO SOBRE EL {_et} (MANDAN SOBRE TODO LO ANTERIOR) ===")
+            partes.append(lead[_k])
     instr=("\nRellena SOLO lo que se necesita (si needs_setting=false deja score_setting=0 y "
            "analisis_setting=''; si needs_triage=false deja score_triage=0, analisis_triaje='' e info_triaje='').")
     body={"model":MODEL,"max_tokens":2200,
