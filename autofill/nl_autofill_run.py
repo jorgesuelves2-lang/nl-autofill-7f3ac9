@@ -149,6 +149,19 @@ for lead in pend:
         # Sin grabacion -> no se analiza: se deja el marcador y el scan lo reintentara cuando llegue la grabacion.
         tri_sin_grabacion = lead["needs_triage"] and not lead.get("transcripcion_triaje")
         if tri_sin_grabacion: lead["needs_triage"]=False
+        # Si no queda NADA que la IA pueda analizar (solo faltaba la grabacion del triaje), no se
+        # llama a Claude: se marca "NO HAY GRABACION" una sola vez y se pasa al siguiente. Esto evita
+        # gastar credito reanalizando en bucle a leads que nunca tendran grabacion (los de Christian).
+        # (Corregido 20-ago-2026.)
+        if not lead["needs_setting"] and not lead["needs_triage"]:
+            if tri_sin_grabacion and not lead.get("triaje_ya_marcado"):
+                r={"contact_id":lead["contact_id"],"tags":["claude-analizado"],"analisis_triaje":"NO HAY GRABACION"}
+                if lead.get("link_triaje"): r["link_triaje"]=lead["link_triaje"]
+                if lead.get("setter"): r["setter"]=lead["setter"]
+                results.append(r); print("  MARCADO sin IA (sin grabacion)",lead["nombre"])
+            else:
+                print("  SKIP sin IA (sin grabacion, ya marcado)",lead["nombre"])
+            continue
         a=claude(lead); r={"contact_id":lead["contact_id"],"tags":["claude-analizado"]}
         if lead["needs_setting"]: r["score_setting"]=a["score_setting"]; r["analisis_setting"]=a["analisis_setting"]
         if tri_sin_grabacion:
