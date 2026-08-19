@@ -42,6 +42,15 @@ TRIAGE_CALS=["2EY5mRYqpaAx4qfnsWJM","1kHWabxSmIJSHTfdr7s5"]; DAYS=30
 # El scan descubre ambas; needs_setting/needs_triage deciden que se rellena segun los datos disponibles.
 READY_TAGS=["setting-listo","triaje-listo"]; DONE_TAG="claude-analizado"
 F_ANALISIS_SETTING="bhgSTSIi5k9tCfiDQFD5"; F_ANALISIS_TRIAJE="tXb9dblrmzhtTZqdmBBj"
+# 19-ago-2026: campos que un HUMANO rellena para corregir a la IA. El motor los LEE (mandan sobre
+# su propia lectura) y NUNCA los escribe.
+F_CORR_SETTING="B34etcCTYDQf4KoD1rAC"; F_CORR_TRIAJE="GGuq9AxqEhBSDigIobc4"
+F_CORR_CLOSING="IDDnqCFEf7PEgi4wgTSC"
+# Nada de esto es "formulario": son salidas de la IA o notas humanas. Si se cuelan en
+# campos_formulario contaminan el bloque CONTRASTE (que debe comparar chat vs formulario del lead).
+NO_FORM={F_ANALISIS_SETTING,F_ANALISIS_TRIAJE,F_CORR_SETTING,F_CORR_TRIAJE,F_CORR_CLOSING,
+         "N4HJDy9VFhKhGCpwJoAk","pmdl73DA4oYGPByvNdPE","BAdbcKq3A7Ks4kiaE9Vf",
+         "EC5k5nHjjV9E5Vj6kkgp","oifF0hrcf0xkEDrlSsg1","RTwU2tkCOz5d55pTJzUO"}
 BACKLOG="--backlog" in sys.argv
 OUT="/tmp/nl_autofill_pending.json"
 def cg(u,key=None):
@@ -197,7 +206,7 @@ def fetch(cid):
     # vacio o "NO HAY GRABACION" cuentan como pendiente: cuando aparezca la grabacion se analiza de verdad
     needs_triage=(bool(fa) or has_note or any(t.startswith("triage-") for t in tags)) and (not _tri or _tri.upper().startswith("NO HAY GRABACION"))
     if not (needs_setting or needs_triage): return None
-    filled={cat.get(k,k):v for k,v in cf.items() if v not in (None,"") and not str(k).startswith("Analisis")}
+    filled={cat.get(k,k):v for k,v in cf.items() if v not in (None,"") and k not in NO_FORM}
     # link de la grabacion: de la API de Fathom (David/Natalie) o, si no, del link pegado en la nota (cubre triajes de Christian)
     notelink=None
     for _n in notes_txt:
@@ -209,6 +218,8 @@ def fetch(cid):
             "campos_formulario":filled,"notas":notes_txt,
             "transcripcion_triaje": fa["transcript"] if fa else None,
             "link_triaje": (fa.get("url") if fa else None) or notelink,
+            "correcciones_setting": (cf.get(F_CORR_SETTING) or "").strip() or None,
+            "correcciones_triaje": (cf.get(F_CORR_TRIAJE) or "").strip() or None,
             "setter": _setter(c,tags)}
 out=[]
 with ThreadPoolExecutor(max_workers=8) as ex:
