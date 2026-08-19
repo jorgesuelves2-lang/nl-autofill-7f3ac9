@@ -124,8 +124,13 @@ def fetch(cid):
     if not fa: return None  # sin transcripcion -> no se puede resumir
     if not nombre: nombre=ev_title.get(cid,"(sin nombre)")
     notes=cg(f"https://services.leadconnectorhq.com/contacts/{cid}/notes").get("notes",[])
-    filled={cat.get(k,k):v for k,v in cf.items() if v not in (None,"") and not str(k).startswith(("Analisis","Informaci"))}
+    # 19-ago-2026: fuera de "campos" las salidas de la IA y las correcciones humanas (van aparte y mandan).
+    F_CORR_CLOSING="IDDnqCFEf7PEgi4wgTSC"
+    NO_CAMPO={F_INFO,F_SCORE,F_OBJ,F_MOTIVO,F_LINK,F_CORR_CLOSING,
+              "B34etcCTYDQf4KoD1rAC","GGuq9AxqEhBSDigIobc4"}
+    filled={cat.get(k,k):v for k,v in cf.items() if v not in (None,"") and k not in NO_CAMPO}
     return {"contact_id":cid,"nombre":nombre,"campos":filled,"notas":[strip(n.get("body")) for n in notes],
+            "correcciones": (cf.get(F_CORR_CLOSING) or "").strip() or None,
             "transcripcion":fa["transcript"],"url":fa["url"]}
 pend=[]
 with ThreadPoolExecutor(max_workers=8) as ex:
@@ -137,6 +142,10 @@ print(f"Closings con cita ({DAYS}d): {len(cids)} | Fathom closings: {len(fmap)} 
 SYS=("Eres analista de llamadas de CLOSING (venta) de NatschoLibre (consultoria para emigrar a Alemania como "
 "medico/ingeniero; closer principal: Natalie). Te paso la transcripcion de una llamada de cierre + datos de la ficha. "
 "Devuelve un analisis para Natalie. REGLAS: no inventes; ASCII sin tildes. "
+"Si llega un bloque 'CORRECCIONES MANUALES', lo ha escrito una persona del equipo para corregirte: sabe cosas "
+"que tu no ves (lo hablado por WhatsApp/telefono, contexto, errores tuyos previos). MANDA sobre tu propia "
+"lectura de la transcripcion y de la ficha; si te contradice, gana la correccion. Incorporala con naturalidad "
+"sin citar el nombre del campo, y ajusta el score si cambia la cualificacion. "
 "Score 0-100 de calidad/probabilidad. Objeciones: las que aparecieron. Motivo: si NO cerro, el motivo principal "
 "(Dinero / Tiempo / Decisor / No convencido / Idioma-nivel / Otro). "
 "FORMATO de 'info' (briefing post-closing, secciones con este encabezado exacto): "
@@ -151,6 +160,9 @@ def claude(p):
     for k,v in p["campos"].items(): blob.append(f"- {k}: {v}")
     blob.append("NOTAS:"); blob+= p["notas"]
     blob.append("TRANSCRIPCION DEL CLOSING:"); blob.append(p["transcripcion"])
+    if p.get("correcciones"):
+        blob.append("=== CORRECCIONES MANUALES DEL EQUIPO (MANDAN SOBRE TODO LO ANTERIOR) ===")
+        blob.append(p["correcciones"])
     body={"model":MODEL,"max_tokens":1500,"system":SYS,
           "messages":[{"role":"user","content":"\n".join(blob)}],
           "output_config":{"format":{"type":"json_schema","schema":SCHEMA}}}
