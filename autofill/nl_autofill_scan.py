@@ -144,27 +144,56 @@ for _FK in FKEYS:  # recorre cada cuenta de Fathom (David/Natalie + Christian...
 cat={f["id"]:f.get("name") for f in cg(f"https://services.leadconnectorhq.com/locations/{LOC}/customFields").get("customFields",[])}
 
 H0415=["-H",f"Authorization: Bearer {T}","-H","Version: 2021-04-15","-H","Accept: application/json"]
+CONV_ERROR="__ERROR_CONVERSACION__"
+def _estrangulado(d):
+    """GHL contesta al rate-limit con un JSON PERFECTAMENTE VALIDO (a veces incluso HTTP 200).
+    Si no se detecta, .get('conversations') devuelve [] y parece que el lead no tiene chat."""
+    if not isinstance(d,dict): return True
+    sc=d.get("statusCode") or d.get("status")
+    try:
+        if sc and int(sc)>=400: return True
+    except Exception: pass
+    msg=str(d.get("message") or d.get("error") or "").lower()
+    return ("too many" in msg) or ("rate limit" in msg) or ("unauthorized" in msg)
+
+def _curl_json(args, intentos=4):
+    for a in range(intentos):
+        try:
+            d=json.loads(subprocess.run(args,capture_output=True,text=True).stdout)
+        except Exception:
+            d=None
+        if d is not None and not _estrangulado(d): return d
+        time.sleep(1.2*(a+1))
+    return None
+
 def _conversacion(cid, max_msgs=120):
     """Descarga el chat REAL del setting (DM de IG/FB + WhatsApp) en orden cronologico.
     Es la UNICA fuente valida del resumen de setting: el formulario se analiza aparte
-    para poder contrastar ambos (fix 5-ago-2026)."""
-    try:
-        r=subprocess.run(["curl","-s","-m","30","-G","https://services.leadconnectorhq.com/conversations/search",
-            "--data-urlencode",f"locationId={LOC}","--data-urlencode",f"contactId={cid}",
-            "--data-urlencode","limit=5",*H0415],capture_output=True,text=True).stdout
-        convs=json.loads(r).get("conversations",[])
-    except Exception:
-        return None
-    out=[]
+    para poder contrastar ambos (fix 5-ago-2026).
+
+    Devuelve:
+      texto       -> conversacion encontrada
+      None        -> el lead NO tiene chat (comprobado de verdad)
+      CONV_ERROR  -> no se pudo leer (red/estrangulamiento): el lead se APLAZA, no se analiza.
+
+    24-ago-2026: antes un fallo de lectura era indistinguible de "no hay conversacion", asi que
+    la IA escribia 'sin conversacion disponible' en fichas que SI tenian chat y, como el lead
+    quedaba marcado como analizado, ya no se volvia a intentar NUNCA. 27 leads afectados
+    (Olga Betancur, Leonor Escribano, Patricia Zurita, Jhonatan Parra...).
+    """
+    d=_curl_json(["curl","-s","-m","30","-G","https://services.leadconnectorhq.com/conversations/search",
+        "--data-urlencode",f"locationId={LOC}","--data-urlencode",f"contactId={cid}",
+        "--data-urlencode","limit=5",*H0415])
+    if d is None: return CONV_ERROR
+    convs=d.get("conversations",[]) or []
+    out=[]; fallos=0
     for c in convs:
-        try:
-            m=subprocess.run(["curl","-s","-m","30","-G",
-                f"https://services.leadconnectorhq.com/conversations/{c['id']}/messages",
-                "--data-urlencode","limit=100",*H0415],capture_output=True,text=True).stdout
-            mm=json.loads(m).get("messages",{})
-            msgs=mm.get("messages",[]) if isinstance(mm,dict) else (mm or [])
-        except Exception:
-            continue
+        m=_curl_json(["curl","-s","-m","30","-G",
+            f"https://services.leadconnectorhq.com/conversations/{c['id']}/messages",
+            "--data-urlencode","limit=100",*H0415],intentos=3)
+        if m is None: fallos+=1; continue
+        mm=m.get("messages",{})
+        msgs=mm.get("messages",[]) if isinstance(mm,dict) else (mm or [])
         for x in msgs:
             if x.get("messageType") not in ("TYPE_INSTAGRAM","TYPE_FACEBOOK","TYPE_WHATSAPP","TYPE_SMS"): continue
             body=(x.get("body") or "").strip()
@@ -172,6 +201,7 @@ def _conversacion(cid, max_msgs=120):
             out.append({"t":str(x.get("dateAdded"))[:16],
                         "quien":"SETTER" if x.get("direction")=="outbound" else "LEAD",
                         "texto":body[:800]})
+    if not out and fallos: return CONV_ERROR   # habia chats pero no se pudieron leer
     out.sort(key=lambda z:z["t"])
     if not out: return None
     out=out[-max_msgs:]
@@ -219,10 +249,19 @@ def fetch(cid):
     for _n in notes_txt:
         _m=re.search(r'https?://fathom\.video/(?:share|calls)/[A-Za-z0-9_-]+',_n or "")
         if _m and (notelink is None or "/share/" in _m.group(0)): notelink=_m.group(0)
+    # FUENTE REAL del resumen de setting. Si NO se pudo leer, el lead se aplaza a la siguiente
+    # pasada en vez de analizarse a ciegas: escribir "sin conversacion disponible" por un fallo de
+    # red deja la ficha marcada como analizada y ya no se reintenta nunca (24-ago-2026).
+    _conv=_conversacion(cid)
+    if _conv==CONV_ERROR:
+        if needs_setting:
+            print(f"  APLAZADO {nombre}: no se pudo leer la conversacion (se reintenta en la proxima pasada)",flush=True)
+            return None
+        _conv=None   # solo se necesita el triaje: el setting no se toca
     return {"contact_id":cid,"nombre":nombre,"tags":tags,
             "needs_setting":needs_setting,"needs_triage":needs_triage,
             "triaje_ya_marcado":_ya_marcado,
-            "conversacion_setting": _conversacion(cid),   # FUENTE REAL del resumen de setting
+            "conversacion_setting": _conv,
             "campos_formulario":filled,"notas":notes_txt,
             "transcripcion_triaje": fa["transcript"] if fa else None,
             "link_triaje": (fa.get("url") if fa else None) or notelink,
