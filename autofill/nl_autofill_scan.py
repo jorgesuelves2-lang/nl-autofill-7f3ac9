@@ -103,7 +103,11 @@ ev=[]
 for _tc in TRIAGE_CALS:
     ev+=cg(f"https://services.leadconnectorhq.com/calendars/events?locationId={LOC}&calendarId={_tc}&startTime={cut}&endTime={fut}").get("events",[])
 ev_title={}  # cid -> nombre del titulo del evento (para casar Fathom si el contacto es un duplicado sin nombre)
-_TKW=re.compile(r'reuni|introducci|validaci|triage|triaje|llamada|con natalie|dr\.?',re.I)
+# 24-ago-2026: 'dr\.?' casaba con cualquier 'dr' DENTRO de una palabra (Alejan-dra, Pe-dro, San-dra...),
+# asi que el nombre del lead se descartaba y el evento se quedaba sin titulo -> nunca casaba con su
+# grabacion de Fathom y el triaje no se analizaba (caso Carolina Alejandra Campoverde, 21-ago).
+# Ahora solo casa la abreviatura real "Dr." / "Dra." con su punto.
+_TKW=re.compile(r'reuni|introducci|validaci|triage|triaje|llamada|con natalie|\bdra?\.',re.I)
 for e in ev:
     cid=e.get("contactId"); add(cid)  # futuras incluidas (setting); needs_triage sigue gateado por transcripcion
     if cid:
