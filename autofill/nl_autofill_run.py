@@ -125,17 +125,24 @@ def claude(lead):
             partes.append(lead[_k])
     instr=("\nRellena SOLO lo que se necesita (si needs_setting=false deja score_setting=0 y "
            "analisis_setting=''; si needs_triage=false deja score_triage=0, analisis_triaje='' e info_triaje='').")
-    body={"model":MODEL,"max_tokens":2200,
+    # 24-ago-2026: max_tokens estaba en 2200. Con un lead de conversacion larga (80+ mensajes) la
+    # respuesta se cortaba a medias, el JSON salia incompleto y el lead se caia con KeyError.
+    # Se sube el tope y se comprueba que vengan TODAS las claves antes de darlo por bueno.
+    body={"model":MODEL,"max_tokens":5000,
           "system":SYS,
           "messages":[{"role":"user","content":"\n".join(partes)+instr}],
           "output_config":{"format":{"type":"json_schema","schema":SCHEMA}}}
-    out=subprocess.run(["curl","-s","-m","120","-X","POST","https://api.anthropic.com/v1/messages",
+    out=subprocess.run(["curl","-s","-m","180","-X","POST","https://api.anthropic.com/v1/messages",
       "-H",f"x-api-key: {AKEY}","-H","anthropic-version: 2023-06-01","-H","content-type: application/json",
       "--data",json.dumps(body)],capture_output=True,text=True).stdout
     d=json.loads(out or "{}")
     if not d.get("content"): raise RuntimeError("Claude: "+out[:200])
+    if d.get("stop_reason")=="max_tokens": raise RuntimeError("Claude: respuesta cortada por max_tokens")
     txt=next((b["text"] for b in d["content"] if b.get("type")=="text"),"")
-    return json.loads(txt)
+    r=json.loads(txt)
+    faltan=[k for k in SCHEMA["required"] if k not in r]
+    if faltan: raise RuntimeError("Claude: respuesta incompleta, faltan "+",".join(faltan))
+    return r
 
 # 1) detectar
 subprocess.run(["python3",os.path.join(HERE,"nl_autofill_scan.py")]+(["--backlog"] if BACKLOG else []),check=True)
