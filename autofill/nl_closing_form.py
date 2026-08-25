@@ -160,7 +160,13 @@ for s in sorted(subs,key=lambda x:x.get("createdAt") or ""):
     if st:
         ops=(req("GET",f"https://services.leadconnectorhq.com/opportunities/search?location_id={LOC}&contact_id={cid}&limit=3") or {}).get("opportunities",[])
         if ops:
-            r=req("PUT",f"https://services.leadconnectorhq.com/opportunities/{ops[0]['id']}",{"pipelineId":PIPE,"pipelineStageId":st})
+            _body={"pipelineId":PIPE,"pipelineStageId":st}
+            # 25-ago-2026 (pedido por Jorge): si NADIE puso el Value de la oportunidad, se rellena con el
+            # ticket del formulario post-closing. Ese Value es el importe que el bloque de Conversions API
+            # de FunnelUp manda a Meta en el evento Purchase. Nunca se pisa un valor puesto a mano.
+            if ticket>0 and not (ops[0].get("monetaryValue") or 0):
+                _body["monetaryValue"]=ticket
+            r=req("PUT",f"https://services.leadconnectorhq.com/opportunities/{ops[0]['id']}",_body)
             ok = bool(r.get("id") or r.get("opportunity"))
             print(f"  {c.get('firstName','')} {c.get('lastName','')} | {res} | pagado {total_pagado:.0f}/{ticket:.0f} -> {'movida' if ok else 'ERROR'}")
         else:
