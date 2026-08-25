@@ -262,7 +262,11 @@ for a in archivos:
     if st:
         ops = ghl("GET", f"https://services.leadconnectorhq.com/opportunities/search?location_id={LOC}&contact_id={cid}&limit=3").get("opportunities", [])
         if ops:
-            ghl("PUT", f"https://services.leadconnectorhq.com/opportunities/{ops[0]['id']}", {"pipelineId": PIPE, "pipelineStageId": st})
+            _body = {"pipelineId": PIPE, "pipelineStageId": st}
+            # 25-ago-2026: rellenar el Value de la oportunidad con el ticket si nadie lo puso (lo lee el CAPI de Meta)
+            if ticket > 0 and not (ops[0].get("monetaryValue") or 0):
+                _body["monetaryValue"] = ticket
+            ghl("PUT", f"https://services.leadconnectorhq.com/opportunities/{ops[0]['id']}", _body)
 
     # nota en la ficha, legible de un vistazo y con todo el contexto del pago
     link = a.get("webViewLink") or f"https://drive.google.com/file/d/{a['id']}/view"
