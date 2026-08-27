@@ -41,6 +41,10 @@ TRIAGE_CALS=["2EY5mRYqpaAx4qfnsWJM","1kHWabxSmIJSHTfdr7s5"]; DAYS=30
 #  - triaje-listo  : la pone el workflow 04 tras el formulario post-llamada -> añade el analisis de TRIAJE
 # El scan descubre ambas; needs_setting/needs_triage deciden que se rellena segun los datos disponibles.
 READY_TAGS=["setting-listo","triaje-listo"]; DONE_TAG="claude-analizado"
+# 27-ago-2026: un lead que falla al analizarse NO se marca, asi que volvia a entrar en CADA barrido
+# (cada 15 min) y se pagaba la llamada otra vez. Tras 3 fallos se le pone 'ia-descartado' y deja de
+# entrar hasta que un humano lo revise y quite la etiqueta.
+SKIP_TAG="ia-descartado"
 F_ANALISIS_SETTING="bhgSTSIi5k9tCfiDQFD5"; F_ANALISIS_TRIAJE="tXb9dblrmzhtTZqdmBBj"
 # 19-ago-2026: campos que un HUMANO rellena para corregir a la IA. El motor los LEE (mandan sobre
 # su propia lectura) y NUNCA los escribe.
@@ -227,6 +231,7 @@ def fetch(cid):
     notes=cg(f"https://services.leadconnectorhq.com/contacts/{cid}/notes").get("notes",[])
     cf={x.get("id"):x.get("value") for x in c.get("customFields",[])}
     tags=c.get("tags",[]) or []
+    if SKIP_TAG in [str(t).lower() for t in tags]: return None   # 3 fallos: no se reintenta mas
     # OJO: NO excluir por DONE_TAG — un lead analizado pronto (solo setting) debe re-entrar cuando
     # llegue la transcripcion del triaje. La idempotencia la dan los campos vacios (needs_*).
     notes_txt=[strip(n.get("body")) for n in notes]
