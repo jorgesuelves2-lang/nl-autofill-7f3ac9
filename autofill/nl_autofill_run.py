@@ -14,7 +14,26 @@ def env(k,f):
     if v: return v
     b=open(os.path.expanduser(f"~/.natscholibre_secrets/{f}")).read(); return re.search(rf'{k}=(.+)',b).group(1).strip()
 AKEY=env("ANTHROPIC_API_KEY","anthropic.env")
-MODEL="claude-sonnet-4-6"
+MODEL=os.environ.get("MODEL","claude-sonnet-4-6")
+# 27-ago-2026: contador de fallos por lead. Un lead que falla no se marca como analizado, asi que
+# volvia a entrar en CADA barrido (cada 15 min) pagando la llamada otra vez. Al 3er fallo se le pone
+# 'ia-descartado' y el scan deja de proponerlo hasta que un humano quite la etiqueta.
+_GTOK=env("GHL_TOKEN","ghl.env")
+_GH=["-H",f"Authorization: Bearer {_GTOK}","-H","Version: 2021-07-28","-H","Content-Type: application/json"]
+def marcar_fallo(cid,nombre,tags_actuales):
+    t=[str(x).lower() for x in (tags_actuales or [])]
+    n=sum(1 for x in t if x.startswith("ia-fallo-"))
+    nueva = "ia-descartado" if n>=2 else f"ia-fallo-{n+1}"
+    try:
+        subprocess.run(["curl","-s","-m","20","-X","POST",
+            f"https://services.leadconnectorhq.com/contacts/{cid}/tags"]+_GH+
+            ["-d",json.dumps({"tags":[nueva]})],capture_output=True,text=True,timeout=30)
+        if nueva=="ia-descartado":
+            print(f"     -> {nombre}: 3er fallo, marcado 'ia-descartado' (no se reintentara mas)")
+        else:
+            print(f"     -> {nombre}: marcado '{nueva}'")
+    except Exception as _e:
+        print("     -> no se pudo marcar el fallo:",str(_e)[:60])
 LIMIT=int(os.environ.get("LIMIT","15"))
 BACKLOG="--backlog" in sys.argv
 
@@ -181,11 +200,14 @@ for lead in pend:
         results.append(r); print("  OK",lead["nombre"])
     except Exception as e:
         fallos+=1; msg=str(e)[:200]; print("  FALLO",lead["nombre"],"->",msg[:120])
-        # 27-ago-2026: si el fallo es de credito/clave, NO tiene sentido probar con el resto de leads
-        # en esta ejecucion: van a fallar todos igual. Se corta aqui para que el error sea claro.
+        # Si el fallo es de credito/clave, NO tiene sentido probar con el resto de leads en esta
+        # ejecucion: van a fallar todos igual. Se corta SIN contar el fallo contra el lead (la culpa
+        # es de la cuenta, no del lead: cuando haya credito debe reintentarse con normalidad).
         if any(k in msg.lower() for k in ("credit balance","authentication","invalid x-api-key","rate_limit")):
             print("  --> corte: problema de credito/clave de Anthropic, no se intentan mas leads.")
             break
+        # Fallo propio del lead (respuesta cortada, JSON invalido, conversacion rara): se cuenta.
+        marcar_fallo(lead["contact_id"],lead["nombre"],lead.get("tags"))
 json.dump(results,open("/tmp/nl_autofill_results.json","w"),ensure_ascii=False)
 # 2) escribir
 if results:
