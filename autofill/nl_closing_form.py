@@ -81,9 +81,12 @@ def etapa(res,ticket,pagado_todo):
     if r.startswith("vendido"):
         fam=familia(ticket)                       # 35k | 5k | 8k
         estado="pagocompleto" if pagado_todo else "faltanpagos"
-        st=etapa_id(fam,estado)
-        if not st:                                # la columna aun no existe
-            print(f"  AVISO: no encuentro la etapa '{fam}' + '{estado}'. Revisa el pipeline.")
+        # 27-ago-2026: Jorge colapso las 3 columnas de pago completo en una sola "Pago Completo"
+        # (sin el tramo de precio delante). Se busca primero CON tramo -por si algun estado sigue
+        # separado por precio, como hoy pasa con "Faltan Pagos"- y si no existe, sin tramo.
+        st=etapa_id(fam,estado) or etapa_id(estado)
+        if not st:                                # la columna no existe de ninguna de las dos formas
+            print(f"  AVISO: no encuentro etapa para '{estado}' (ni con tramo '{fam}' ni sin el). Revisa el pipeline.")
         return st
     if "seguimiento" in r:  return etapa_id("seguimientocaliente")
     if "no show" in r or "noshow" in r: return etapa_id("clos","noshow")
