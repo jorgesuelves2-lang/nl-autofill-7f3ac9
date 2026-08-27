@@ -258,7 +258,10 @@ for a in archivos:
             {"id": F_RES, "value": "Vendido"},
             {"id": F_ESTADO, "value": "Pago completo" if pagado_todo else "Primer pago"}]})
     fam = familia(ticket) if ticket > 0 else "c35k"
-    st = etapa_id(fam, "pagocompleto" if pagado_todo else "faltanpagos")
+    # 27-ago-2026: las 3 columnas de pago completo se colapsaron en una sola "Pago Completo"
+    # (sin tramo de precio). Se busca con tramo y, si no existe, sin el.
+    _est = "pagocompleto" if pagado_todo else "faltanpagos"
+    st = etapa_id(fam, _est) or etapa_id(_est)
     if st:
         ops = ghl("GET", f"https://services.leadconnectorhq.com/opportunities/search?location_id={LOC}&contact_id={cid}&limit=3").get("opportunities", [])
         if ops:
