@@ -23,4 +23,8 @@ jobs:
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
           HORAS: '24'
           MAX_CONV: '60'
+          # 27-ago-2026: puntuar conversaciones con rubrica fija es tarea de clasificacion, no de
+          # razonamiento: Haiku la hace igual de bien y cuesta ~1/3. Para volver a Sonnet, cambiar
+          # esta linea por claude-sonnet-4-6 (el script lee el modelo de la variable MODEL).
+          MODEL: 'claude-haiku-4-5-20251001'
         run: python3 autofill/nl_analisis_conversaciones.py
