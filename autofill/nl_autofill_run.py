@@ -180,7 +180,12 @@ for lead in pend:
         if lead.get("setter"): r["setter"]=lead["setter"]  # rellena 'Setter asignada' si estaba vacío
         results.append(r); print("  OK",lead["nombre"])
     except Exception as e:
-        fallos+=1; print("  FALLO",lead["nombre"],"->",str(e)[:120])
+        fallos+=1; msg=str(e)[:200]; print("  FALLO",lead["nombre"],"->",msg[:120])
+        # 27-ago-2026: si el fallo es de credito/clave, NO tiene sentido probar con el resto de leads
+        # en esta ejecucion: van a fallar todos igual. Se corta aqui para que el error sea claro.
+        if any(k in msg.lower() for k in ("credit balance","authentication","invalid x-api-key","rate_limit")):
+            print("  --> corte: problema de credito/clave de Anthropic, no se intentan mas leads.")
+            break
 json.dump(results,open("/tmp/nl_autofill_results.json","w"),ensure_ascii=False)
 # 2) escribir
 if results:
