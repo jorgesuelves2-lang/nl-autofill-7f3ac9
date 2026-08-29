@@ -163,6 +163,47 @@ def claude(lead):
     if faltan: raise RuntimeError("Claude: respuesta incompleta, faltan "+",".join(faltan))
     return r
 
+# --- AHORRO (28-ago-2026): no gastar una llamada a Claude en leads que aun no han hablado ---
+# Los leads que agendan solos (webinar, ads) llegan con un chat de 2-3 mensajes automaticos. Analizarlos
+# con IA cuesta ~4 centimos y produce siempre lo mismo: "no se sabe nada, esta sin cualificar", que es
+# informacion que YA esta en el formulario. Para esos se genera la ficha con plantilla, coste cero.
+# En cuanto el lead escriba de verdad, el scan lo devuelve a la cola y se analiza con IA con normalidad.
+MIN_LEAD_CHARS=int(os.environ.get("MIN_LEAD_CHARS","150"))
+_AUTOMATICOS=re.compile(r'ya agend[eé] mi llamada|mi nombre es|^hola[!.\s]*$',re.I)
+def chars_del_lead(conv):
+    """Cuenta lo que ha escrito EL LEAD, descontando los mensajes automaticos de la landing."""
+    n=0
+    for linea in (conv or "").split("\n"):
+        m=re.match(r'^\[[^\]]+\]\s*LEAD:\s*(.*)$',linea.strip())
+        if not m: continue
+        t=m.group(1).strip()
+        if _AUTOMATICOS.search(t): continue
+        n+=len(t)
+    return n
+
+def ficha_sin_ia(lead):
+    """Resumen de un lead que aun no ha conversado: vuelca el formulario, sin llamar a la IA."""
+    L=["ORIGEN: lead que agendo por su cuenta (webinar/anuncio), SIN setting previo y SIN conversacion",
+       "todavia. Ficha generada automaticamente desde el formulario: NO ha intervenido la IA porque no hay",
+       "nada que analizar. En cuanto el lead escriba por WhatsApp se analiza con normalidad.",""]
+    cf=lead.get("campos_formulario") or {}
+    if cf:
+        L.append("LO QUE DECLARO EN EL FORMULARIO:")
+        for k,v in cf.items():
+            k2=re.sub(r'\s+',' ',str(k)).strip()
+            if len(k2)>70: k2=k2[:70]+"..."
+            L.append(f"- {k2}: {v}")
+    else:
+        L.append("LO QUE DECLARO EN EL FORMULARIO: no consta (no hay respuestas registradas).")
+    esc=chars_del_lead(lead.get("conversacion_setting"))
+    L+=["","LO QUE HA ESCRITO EN EL CHAT: "+("nada todavia: no pulso el boton de WhatsApp de la landing"
+        if esc==0 else f"muy poco ({esc} caracteres), sin datos aprovechables"),
+        "","QUE FALTA POR CUALIFICAR: todo. Profesion real, si de verdad quiere Alemania, nivel de aleman,",
+        "horas de estudio, capacidad de pago, quien decide y plazo. Nadie ha hablado con este lead.",
+        "","RECOMENDACION: escribirle por WhatsApp antes de la llamada y confirmar al menos profesion,",
+        "destino (Alemania) y capacidad de inversion, para que el closer no llegue a ciegas."]
+    return "\n".join(L)
+
 # 1) detectar
 subprocess.run(["python3",os.path.join(HERE,"nl_autofill_scan.py")]+(["--backlog"] if BACKLOG else []),check=True)
 pend=json.load(open("/tmp/nl_autofill_pending.json")) if os.path.exists("/tmp/nl_autofill_pending.json") else []
@@ -188,6 +229,12 @@ for lead in pend:
             else:
                 print("  SKIP sin IA (sin grabacion, ya marcado)",lead["nombre"])
             continue
+        # AHORRO: si solo falta el setting y el lead aun no ha escrito nada, ficha por plantilla (0 coste)
+        if lead["needs_setting"] and not lead["needs_triage"] and chars_del_lead(lead.get("conversacion_setting"))<MIN_LEAD_CHARS:
+            r={"contact_id":lead["contact_id"],"tags":["claude-analizado","sin-conversacion"],
+               "score_setting":50,"analisis_setting":ficha_sin_ia(lead)}
+            if lead.get("setter"): r["setter"]=lead["setter"]
+            results.append(r); print("  SIN IA (aun no ha escrito):",lead["nombre"]); continue
         a=claude(lead); r={"contact_id":lead["contact_id"],"tags":["claude-analizado"]}
         if lead["needs_setting"]: r["score_setting"]=a["score_setting"]; r["analisis_setting"]=a["analisis_setting"]
         if tri_sin_grabacion:
